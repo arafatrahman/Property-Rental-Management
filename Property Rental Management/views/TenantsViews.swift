@@ -10,18 +10,35 @@ import PhotosUI
 struct TenantsView: View {
     @EnvironmentObject var manager: RentalManager
     @State private var showingAddEditTenant = false
+    @State private var selectedStatus: TenantStatus = .active
+    
+    private var filteredTenants: [Tenant] {
+        manager.tenants.filter { $0.status == selectedStatus }
+    }
 
     var body: some View {
         NavigationView {
-            List {
-                ForEach(manager.tenants) { tenant in
-                    NavigationLink(destination: TenantDetailView(tenant: tenant)) {
-                        TenantRowView(tenant: tenant)
+            VStack {
+                Picker("Status", selection: $selectedStatus) {
+                    ForEach(TenantStatus.allCases, id: \.self) { status in
+                        Text(status.rawValue).tag(status)
                     }
                 }
-                .onDelete(perform: manager.deleteTenant)
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                
+                List {
+                    ForEach(filteredTenants) { tenant in
+                        NavigationLink(destination: TenantDetailView(tenant: tenant)) {
+                            TenantRowView(tenant: tenant)
+                        }
+                    }
+                    .onDelete { offsets in
+                        manager.deleteTenant(at: offsets, status: selectedStatus)
+                    }
+                }
+                .listStyle(.insetGrouped)
             }
-            .listStyle(.insetGrouped)
             .navigationTitle("Tenants")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -71,12 +88,13 @@ struct TenantRowView: View {
                         .foregroundColor(.orange)
                 }
                 
-                Spacer().frame(height: 4)
-                
-                Text("Next Due: \(tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption)
-                    .foregroundColor(tenant.paymentStatus.color)
-                    .fontWeight(.medium)
+                if tenant.status == .active {
+                    Spacer().frame(height: 4)
+                    Text("Next Due: \(tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundColor(tenant.paymentStatus.color)
+                        .fontWeight(.medium)
+                }
             }
         }
         .padding(.vertical, 8)
@@ -185,7 +203,7 @@ struct AddEditTenantView: View {
         let amountOwed = Double(amountOwedString) ?? 0.0
         let depositAmount = Double(depositAmountString) ?? 0.0
         
-        let newTenant = Tenant(id: id ?? UUID(), name: name, phone: phone, email: email, leaseStartDate: leaseStartDate, leaseEndDate: leaseEndDate, propertyId: selectedPropertyId, nextDueDate: tenant?.nextDueDate ?? leaseStartDate, imageData: imageData, amountOwed: amountOwed, depositAmount: depositAmount, isDepositPaid: tenant?.isDepositPaid ?? false)
+        let newTenant = Tenant(id: id ?? UUID(), name: name, phone: phone, email: email, leaseStartDate: leaseStartDate, leaseEndDate: leaseEndDate, propertyId: selectedPropertyId, nextDueDate: tenant?.nextDueDate ?? leaseStartDate, imageData: imageData, amountOwed: amountOwed, depositAmount: depositAmount, isDepositPaid: tenant?.isDepositPaid ?? false, status: tenant?.status ?? .active)
         manager.saveTenant(tenant: newTenant)
         manager.recalculateBalance(forTenantId: newTenant.id)
         dismiss()
@@ -193,12 +211,14 @@ struct AddEditTenantView: View {
 }
 
 struct TenantDetailView: View {
+    @Environment(\.dismiss) var dismiss
     @EnvironmentObject var manager: RentalManager
     @EnvironmentObject var settings: SettingsManager
     let tenant: Tenant
     @State private var showingAddEditTenant = false
     @State private var incomeToEdit: Income?
     @State private var showingLogDepositSheet = false
+    @State private var showingArchiveAlert = false
 
     var body: some View {
         List {
@@ -210,7 +230,9 @@ struct TenantDetailView: View {
             
             Section("Financials") {
                 InfoRowView(label: "Current Balance", value: tenant.amountOwed.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
-                InfoRowView(label: "Next Payment Due", value: tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))
+                if tenant.status == .active {
+                    InfoRowView(label: "Next Payment Due", value: tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))
+                }
                 
                 if tenant.depositAmount > 0 {
                     HStack {
@@ -256,27 +278,6 @@ struct TenantDetailView: View {
                 }
             }
             
-            Section("Billable Expenses") {
-                let billableExpenses = manager.expenses.filter { $0.propertyId == tenant.propertyId && $0.isBillableToTenant }
-                if billableExpenses.isEmpty {
-                    Text("No billable expenses found.")
-                } else {
-                    ForEach(billableExpenses) { expense in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(expense.description)
-                                if let category = manager.getCategory(byId: expense.categoryId) {
-                                    Text(category.name).font(.caption).foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Text(expense.amount.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-            }
-            
             Section("Payment History") {
                 let tenantIncomes = manager.incomes.filter { $0.tenantId == tenant.id }.sorted(by: { $0.date > $1.date })
                 if tenantIncomes.isEmpty {
@@ -314,6 +315,19 @@ struct TenantDetailView: View {
                     }
                 }
             }
+            
+            Section("Management") {
+                if tenant.status == .active {
+                    Button("Archive Tenant", role: .destructive) {
+                        showingArchiveAlert = true
+                    }
+                } else {
+                    Button("Reactivate Tenant") {
+                        manager.reactivateTenant(tenant)
+                        dismiss()
+                    }
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle(tenant.name)
@@ -337,6 +351,15 @@ struct TenantDetailView: View {
                 preselectedDescription: "Security Deposit",
                 preselectedCategoryId: depositCategory?.id
             )
+        }
+        .alert("Archive Tenant?", isPresented: $showingArchiveAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Archive", role: .destructive) {
+                manager.archiveTenant(tenant)
+                dismiss()
+            }
+        } message: {
+            Text("Archiving this tenant will mark their associated property as vacant. Their financial history will be preserved. Are you sure?")
         }
     }
 }

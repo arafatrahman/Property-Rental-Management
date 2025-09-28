@@ -17,6 +17,11 @@ struct AppData: Codable {
     var appointments: [Appointment] = []
 }
 
+enum TenantStatus: String, Codable, CaseIterable {
+    case active = "Active"
+    case archived = "Archived"
+}
+
 enum TransactionType: String, Codable, CaseIterable {
     case income = "Income"
     case expense = "Expense"
@@ -103,6 +108,7 @@ struct Tenant: Identifiable, Codable, Hashable {
     var amountOwed: Double = 0.0
     var depositAmount: Double = 0.0
     var isDepositPaid: Bool = false
+    var status: TenantStatus = .active
 
     var paymentStatus: PaymentStatus {
         let today = Calendar.current.startOfDay(for: Date())

@@ -269,14 +269,18 @@ class RentalManager: ObservableObject {
         saveData()
     }
     
-    func deleteTenant(at offsets: IndexSet) {
-        let tenantsToDelete = offsets.map { tenants[$0] }
+    func deleteTenant(at offsets: IndexSet, status: TenantStatus) {
+        let tenantsInScope = tenants.filter { $0.status == status }
+        let tenantsToDelete = offsets.map { tenantsInScope[$0] }
+        
         for tenant in tenantsToDelete {
             NotificationManager.instance.cancelNotification(for: tenant.id)
             NotificationManager.instance.cancelLeaseExpiryNotification(for: tenant)
             reminderScheduledForTenantIDs.remove(tenant.id)
         }
-        let idsToDelete = tenantsToDelete.map { $0.id }
+        
+        let idsToDelete = Set(tenantsToDelete.map { $0.id })
+        
         properties = properties.map { property in
             var mutableProperty = property
             if let tenantId = mutableProperty.tenantId, idsToDelete.contains(tenantId) {
@@ -285,13 +289,27 @@ class RentalManager: ObservableObject {
             }
             return mutableProperty
         }
-        incomes.removeAll { income in
-            if let tenantId = income.tenantId {
-                return idsToDelete.contains(tenantId)
-            }
-            return false
+        
+        tenants.removeAll { idsToDelete.contains($0.id) }
+        saveData()
+    }
+    
+    func archiveTenant(_ tenant: Tenant) {
+        guard let tenantIndex = tenants.firstIndex(where: { $0.id == tenant.id }) else { return }
+        
+        tenants[tenantIndex].status = .archived
+        
+        if let propertyId = tenant.propertyId, let propIndex = properties.firstIndex(where: { $0.id == propertyId }) {
+            properties[propIndex].isVacant = true
+            properties[propIndex].tenantId = nil
         }
-        tenants.remove(atOffsets: offsets)
+        
+        saveData()
+    }
+    
+    func reactivateTenant(_ tenant: Tenant) {
+        guard let tenantIndex = tenants.firstIndex(where: { $0.id == tenant.id }) else { return }
+        tenants[tenantIndex].status = .active
         saveData()
     }
 
