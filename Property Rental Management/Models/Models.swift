@@ -7,7 +7,6 @@
 import Foundation
 import SwiftUI
 
-// ✅ NEW: A container for all app data to simplify saving and loading.
 struct AppData: Codable {
     var properties: [Property] = []
     var tenants: [Tenant] = []
@@ -18,8 +17,6 @@ struct AppData: Codable {
     var appointments: [Appointment] = []
 }
 
-
-// MARK: - Enums
 enum TransactionType: String, Codable, CaseIterable {
     case income = "Income"
     case expense = "Expense"
@@ -68,7 +65,6 @@ enum CurrencySymbol: String, CaseIterable, Identifiable {
     var id: String { self.rawValue }
 }
 
-// MARK: - Data Structures
 struct TransactionCategory: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -98,6 +94,8 @@ struct Tenant: Identifiable, Codable, Hashable {
     var nextDueDate: Date = Date()
     var imageData: Data?
     var amountOwed: Double = 0.0
+    var depositAmount: Double = 0.0
+    var isDepositPaid: Bool = false
 
     var paymentStatus: PaymentStatus {
         let today = Calendar.current.startOfDay(for: Date())

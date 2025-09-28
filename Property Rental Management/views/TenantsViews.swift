@@ -37,7 +37,6 @@ struct TenantsView: View {
     }
 }
 
-// ✅ REDESIGNED: A final, minimalist design removing all amounts from the row.
 struct TenantRowView: View {
     @EnvironmentObject var manager: RentalManager
     @EnvironmentObject var settings: SettingsManager
@@ -45,7 +44,6 @@ struct TenantRowView: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // MARK: Avatar
             if let imageData = tenant.imageData, let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -58,7 +56,6 @@ struct TenantRowView: View {
                     .foregroundColor(.secondary)
             }
 
-            // MARK: Tenant Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(tenant.name)
                     .font(.headline)
@@ -90,6 +87,7 @@ struct TenantRowView: View {
 struct AddEditTenantView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var manager: RentalManager
+    @EnvironmentObject var settings: SettingsManager
     var tenant: Tenant?
 
     @State private var id: UUID?
@@ -101,7 +99,10 @@ struct AddEditTenantView: View {
     @State private var selectedPropertyId: UUID?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var imageData: Data?
-    @State private var amountOwedString: String = "0.0"
+    
+    // ✅ MODIFIED: Initial value is now blank instead of "0.0".
+    @State private var amountOwedString: String = ""
+    @State private var depositAmountString: String = ""
 
     var body: some View {
         NavigationView {
@@ -127,11 +128,24 @@ struct AddEditTenantView: View {
                     TextField("Email Address", text: $email).keyboardType(.emailAddress)
                 }
                 
+                // ✅ MODIFIED: This section now uses explicit labels for clarity.
                 Section("Lease Details") {
                     DatePicker("Lease Start", selection: $leaseStartDate, displayedComponents: .date)
                     DatePicker("Lease End", selection: $leaseEndDate, displayedComponents: .date)
-                    TextField("Opening Balance Owed", text: $amountOwedString)
-                        .keyboardType(.decimalPad)
+                    
+                    HStack {
+                        Text("Opening Balance (\(settings.currencySymbol.rawValue))")
+                        TextField("0", text: $amountOwedString)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    
+                    HStack {
+                        Text("Security Deposit (\(settings.currencySymbol.rawValue))")
+                        TextField("0", text: $depositAmountString)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
                 
                 Section("Assign to Property") {
@@ -158,13 +172,17 @@ struct AddEditTenantView: View {
             id = t.id; name = t.name; phone = t.phone; email = t.email
             leaseStartDate = t.leaseStartDate; leaseEndDate = t.leaseEndDate
             selectedPropertyId = t.propertyId; imageData = t.imageData
+            // Show 0 values when editing, but leave blank if value is 0 and it's a new tenant (which is handled by the @State initializer)
             amountOwedString = String(t.amountOwed)
+            depositAmountString = String(t.depositAmount)
         }
     }
     
     private func save() {
         let amountOwed = Double(amountOwedString) ?? 0.0
-        let newTenant = Tenant(id: id ?? UUID(), name: name, phone: phone, email: email, leaseStartDate: leaseStartDate, leaseEndDate: leaseEndDate, propertyId: selectedPropertyId, nextDueDate: tenant?.nextDueDate ?? leaseStartDate, imageData: imageData, amountOwed: amountOwed)
+        let depositAmount = Double(depositAmountString) ?? 0.0
+        
+        let newTenant = Tenant(id: id ?? UUID(), name: name, phone: phone, email: email, leaseStartDate: leaseStartDate, leaseEndDate: leaseEndDate, propertyId: selectedPropertyId, nextDueDate: tenant?.nextDueDate ?? leaseStartDate, imageData: imageData, amountOwed: amountOwed, depositAmount: depositAmount, isDepositPaid: tenant?.isDepositPaid ?? false)
         manager.saveTenant(tenant: newTenant)
         manager.recalculateBalance(forTenantId: newTenant.id)
         dismiss()
@@ -177,6 +195,7 @@ struct TenantDetailView: View {
     let tenant: Tenant
     @State private var showingAddEditTenant = false
     @State private var incomeToEdit: Income?
+    @State private var showingLogDepositSheet = false
 
     var body: some View {
         List {
@@ -189,6 +208,27 @@ struct TenantDetailView: View {
             Section("Financials") {
                 InfoRowView(label: "Amount Owed", value: tenant.amountOwed.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
                 InfoRowView(label: "Next Payment Due", value: tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))
+                
+                if tenant.depositAmount > 0 {
+                    HStack {
+                        InfoRowView(label: "Security Deposit", value: tenant.depositAmount.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
+                        Spacer()
+                        Text(tenant.isDepositPaid ? "Paid" : "Pending")
+                            .font(.caption.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(tenant.isDepositPaid ? Color.green : Color.orange)
+                            .clipShape(Capsule())
+                    }
+                }
+                
+                if !tenant.isDepositPaid && tenant.depositAmount > 0 {
+                    Button("Log Deposit Payment") {
+                        showingLogDepositSheet = true
+                    }
+                    .foregroundColor(.accentColor)
+                }
             }
             
             Section("Contact Information") {
@@ -284,6 +324,16 @@ struct TenantDetailView: View {
         }
         .sheet(item: $incomeToEdit) { income in
             EditIncomeView(income: income)
+        }
+        .sheet(isPresented: $showingLogDepositSheet) {
+            let depositCategory = manager.transactionCategories.first { $0.name == "Security Deposit" }
+            AddIncomeView(
+                preselectedTenantId: tenant.id,
+                preselectedPropertyId: tenant.propertyId,
+                preselectedAmount: tenant.depositAmount,
+                preselectedDescription: "Security Deposit",
+                preselectedCategoryId: depositCategory?.id
+            )
         }
     }
 }

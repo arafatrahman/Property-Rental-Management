@@ -9,7 +9,6 @@ import Combine
 import UserNotifications
 import SwiftUI
 
-// MARK: - Settings Manager
 class SettingsManager: ObservableObject {
     @AppStorage("currencySymbol") var currencySymbolRaw: String = CurrencySymbol.usd.rawValue
 
@@ -24,8 +23,6 @@ class SettingsManager: ObservableObject {
     }
 }
 
-
-// MARK: - Rental Manager
 @MainActor
 class RentalManager: ObservableObject {
     @Published var properties: [Property] = []
@@ -37,7 +34,6 @@ class RentalManager: ObservableObject {
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
 
-    // ✅ MODIFIED: Switched from UserDefaults keys to a single file URL for data persistence
     private var dataFileURL: URL {
         do {
             let documentsDirectory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -63,7 +59,6 @@ class RentalManager: ObservableObject {
         updateAllTenantBalances()
     }
 
-    // ✅ REDESIGNED: Saves all data to a single JSON file
     func saveData() {
         let appData = AppData(
             properties: self.properties,
@@ -87,7 +82,6 @@ class RentalManager: ObservableObject {
         }
     }
 
-    // ✅ REDESIGNED: Loads all data from a single JSON file
     func loadData() {
         guard FileManager.default.fileExists(atPath: dataFileURL.path) else {
             if transactionCategories.isEmpty { loadDefaultCategories() }
@@ -116,7 +110,6 @@ class RentalManager: ObservableObject {
         }
     }
     
-    // ✅ NEW: Exports data for sharing or backup
     func exportData() -> Data? {
         do {
             let data = try Data(contentsOf: dataFileURL)
@@ -127,7 +120,6 @@ class RentalManager: ObservableObject {
         }
     }
 
-    // ✅ NEW: Imports data from a file, overwriting existing data
     func importData(from data: Data) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -141,7 +133,6 @@ class RentalManager: ObservableObject {
             self.maintenanceRequests = appData.maintenanceRequests
             self.appointments = appData.appointments
             
-            // After importing, save it as the new local state
             saveData()
             
         } catch {
@@ -170,7 +161,6 @@ class RentalManager: ObservableObject {
         var totalOwed: Double = 0
         var currentDate = tenant.leaseStartDate
         
-        // 1. Calculate total rent charges from lease start to today
         while currentDate < Date() {
             totalOwed += property.rentAmount
             
@@ -191,14 +181,11 @@ class RentalManager: ObservableObject {
             }
         }
         
-        // 2. Add all billable expenses
         let totalBillableExpenses = expenses.filter { $0.propertyId == propertyId && $0.isBillableToTenant }.reduce(0) { $0 + $1.amount }
         totalOwed += totalBillableExpenses
         
-        // 3. Subtract all payments made
         let totalPaid = incomes.filter { $0.tenantId == tenantId }.reduce(0) { $0 + $1.amount }
         
-        // 4. Update tenant's balance and next due date
         tenants[tenantIndex].nextDueDate = currentDate
         tenants[tenantIndex].amountOwed = totalOwed - totalPaid
     }
@@ -210,6 +197,7 @@ class RentalManager: ObservableObject {
             TransactionCategory(name: "Late Fee", type: .income, iconName: "clock.badge.exclamationmark.fill"),
             TransactionCategory(name: "Parking", type: .income, iconName: "car.fill"),
             TransactionCategory(name: "Laundry", type: .income, iconName: "washer.fill"),
+            TransactionCategory(name: "Security Deposit", type: .income, iconName: "shield.lefthalf.filled"),
             TransactionCategory(name: "Other Income", type: .income, iconName: "dollarsign.circle.fill"),
             
             TransactionCategory(name: "Repairs", type: .expense, iconName: "wrench.and.screwdriver.fill"),
@@ -218,6 +206,7 @@ class RentalManager: ObservableObject {
             TransactionCategory(name: "Mortgage", type: .expense, iconName: "banknote.fill"),
             TransactionCategory(name: "Insurance", type: .expense, iconName: "shield.fill"),
             TransactionCategory(name: "Management", type: .expense, iconName: "person.2.badge.gearshape.fill"),
+            TransactionCategory(name: "Deposit Refund", type: .expense, iconName: "shield.slash"),
             TransactionCategory(name: "Landscaping", type: .expense, iconName: "leaf.fill"),
             TransactionCategory(name: "Other Expense", type: .expense, iconName: "creditcard.fill")
         ]
@@ -292,6 +281,12 @@ class RentalManager: ObservableObject {
     func logIncome(income: Income) {
         incomes.insert(income, at: 0)
         
+        if let categoryId = income.categoryId, let category = getCategory(byId: categoryId), category.name == "Security Deposit" {
+            if let tenantId = income.tenantId, let tenantIndex = tenants.firstIndex(where: { $0.id == tenantId }) {
+                tenants[tenantIndex].isDepositPaid = true
+            }
+        }
+        
         if let tenantId = income.tenantId {
             recalculateBalance(forTenantId: tenantId)
         }
@@ -305,19 +300,38 @@ class RentalManager: ObservableObject {
         
         if let oldTenantId = oldIncome.tenantId, oldTenantId != income.tenantId {
             recalculateBalance(forTenantId: oldTenantId)
+            updateDepositStatus(for: oldTenantId)
         }
         if let currentTenantId = income.tenantId {
              recalculateBalance(forTenantId: currentTenantId)
+             updateDepositStatus(for: currentTenantId)
         }
         saveData()
     }
     
     func deleteIncome(_ income: Income) {
+        let wasDepositPayment = (getCategory(byId: income.categoryId)?.name ?? "") == "Security Deposit"
+
         incomes.removeAll { $0.id == income.id }
+        
         if let tenantId = income.tenantId {
+            if wasDepositPayment {
+                updateDepositStatus(for: tenantId)
+            }
             recalculateBalance(forTenantId: tenantId)
         }
         saveData()
+    }
+    
+    private func updateDepositStatus(for tenantId: UUID) {
+        guard let tenantIndex = tenants.firstIndex(where: { $0.id == tenantId }) else { return }
+        
+        let depositCategory = transactionCategories.first { $0.name == "Security Deposit" }
+        let hasDepositPayment = incomes.contains {
+            $0.tenantId == tenantId && $0.categoryId == depositCategory?.id
+        }
+        
+        tenants[tenantIndex].isDepositPaid = hasDepositPayment
     }
     
     func logExpense(expense: Expense) {
@@ -419,14 +433,10 @@ class RentalManager: ObservableObject {
     func getProperty(for tenant: Tenant) -> Property? { properties.first { $0.id == tenant.propertyId } }
     func getTenant(byId id: UUID) -> Tenant? { tenants.first { $0.id == id } }
     func getProperty(byId id: UUID) -> Property? { properties.first { $0.id == id } }
-    
-    // ❌ REMOVED: The entire loadMockData function has been deleted to prevent dummy data.
 }
 
-
-// MARK: - Notification Manager
 class NotificationManager {
-    static let instance = NotificationManager() // Singleton
+    static let instance = NotificationManager()
 
     func requestAuthorization() {
         let options: UNAuthorizationOptions = [.alert, .sound, .badge]
@@ -462,8 +472,8 @@ class NotificationManager {
         content.body = "You have an appointment for \(appointment.property.name) in 1 hour."
         content.sound = .default
 
-        let triggerDate = appointment.date.addingTimeInterval(-3600) // 1 hour before
-        guard triggerDate > Date() else { return } // Don't schedule for past appointments
+        let triggerDate = appointment.date.addingTimeInterval(-3600)
+        guard triggerDate > Date() else { return }
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: triggerDate.timeIntervalSinceNow, repeats: false)
         let request = UNNotificationRequest(identifier: "appt-\(appointment.id.uuidString)", content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)

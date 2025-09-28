@@ -237,6 +237,12 @@ struct AddIncomeView: View {
     @State private var selectedTenantId: UUID?
     @State private var categoryId: UUID?
 
+    var preselectedTenantId: UUID?
+    var preselectedPropertyId: UUID?
+    var preselectedAmount: Double?
+    var preselectedDescription: String?
+    var preselectedCategoryId: UUID?
+
     var body: some View {
         NavigationView {
             Form {
@@ -269,12 +275,21 @@ struct AddIncomeView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(!isFormValid) }
             }
             .onChange(of: selectedPropertyId) { _, newPropertyId in
-                guard let newPropertyId = newPropertyId,
-                      let property = manager.getProperty(byId: newPropertyId) else {
-                    selectedTenantId = nil
-                    return
+                if preselectedTenantId == nil {
+                    guard let newPropertyId = newPropertyId,
+                          let property = manager.getProperty(byId: newPropertyId) else {
+                        selectedTenantId = nil
+                        return
+                    }
+                    selectedTenantId = property.tenantId
                 }
-                selectedTenantId = property.tenantId
+            }
+            .onAppear {
+                if let id = preselectedTenantId { selectedTenantId = id }
+                if let id = preselectedPropertyId { selectedPropertyId = id }
+                if let amount = preselectedAmount { amountString = String(amount) }
+                if let desc = preselectedDescription { description = desc }
+                if let id = preselectedCategoryId { categoryId = id }
             }
         }
     }
@@ -306,7 +321,7 @@ struct AddExpenseView: View {
     @State private var date = Date()
     @State private var selectedPropertyId: UUID?
     @State private var categoryId: UUID?
-    @State private var selectedTenantId: UUID? // Added for consistency, though unused in logic
+    @State private var selectedTenantId: UUID?
 
     var body: some View {
         NavigationView {
