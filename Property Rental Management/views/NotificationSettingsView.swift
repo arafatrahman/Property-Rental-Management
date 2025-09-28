@@ -10,15 +10,22 @@ import SwiftUI
 struct NotificationSettingsView: View {
     @AppStorage("enablePaymentReminders") private var enablePaymentReminders: Bool = true
     @AppStorage("enableAppointmentReminders") private var enableAppointmentReminders: Bool = true
+    @AppStorage("enableLeaseExpiryReminders") private var enableLeaseExpiryReminders: Bool = true
+    @AppStorage("enableMaintenanceReminders") private var enableMaintenanceReminders: Bool = true
+    @AppStorage("enableDeadlineReminders") private var enableDeadlineReminders: Bool = true
+
 
     var body: some View {
         Form {
-            Section("Enable Notifications") {
-                Toggle("Payment Reminders", isOn: $enablePaymentReminders)
+            Section("Reminders") {
+                Toggle("Payment Due Reminders", isOn: $enablePaymentReminders)
                 Toggle("Appointment Reminders", isOn: $enableAppointmentReminders)
+                Toggle("Lease Expiry Reminders", isOn: $enableLeaseExpiryReminders)
+                Toggle("Maintenance Follow-ups", isOn: $enableMaintenanceReminders)
+                Toggle("Property Deadline Reminders", isOn: $enableDeadlineReminders)
             }
             
-            Section(footer: Text("Payment reminders are scheduled for one day before the due date. Appointment reminders are scheduled for one hour before the event.")) {
+            Section(footer: Text("Reminders are scheduled automatically based on the dates you enter throughout the app. You can request notification permissions again if needed.")) {
                 Button("Request Notification Permissions") {
                     NotificationManager.instance.requestAuthorization()
                 }

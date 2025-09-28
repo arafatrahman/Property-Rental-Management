@@ -36,6 +36,9 @@ class RentalManager: ObservableObject {
 
     @AppStorage("enablePaymentReminders") private var enablePaymentReminders: Bool = true
     @AppStorage("enableAppointmentReminders") private var enableAppointmentReminders: Bool = true
+    @AppStorage("enableLeaseExpiryReminders") private var enableLeaseExpiryReminders: Bool = true
+    @AppStorage("enableMaintenanceReminders") private var enableMaintenanceReminders: Bool = true
+    @AppStorage("enableDeadlineReminders") private var enableDeadlineReminders: Bool = true
     
     private var dataFileURL: URL {
         do {
@@ -187,7 +190,10 @@ class RentalManager: ObservableObject {
         let totalBillableExpenses = expenses.filter { $0.propertyId == propertyId && $0.isBillableToTenant }.reduce(0) { $0 + $1.amount }
         totalOwed += totalBillableExpenses
         
-        let totalPaid = incomes.filter { $0.tenantId == tenantId }.reduce(0) { $0 + $1.amount }
+        let depositCategory = transactionCategories.first { $0.name == "Security Deposit" }
+        let totalPaid = incomes.filter {
+            $0.tenantId == tenantId && $0.categoryId != depositCategory?.id
+        }.reduce(0) { $0 + $1.amount }
         
         tenants[tenantIndex].nextDueDate = currentDate
         tenants[tenantIndex].amountOwed = totalOwed - totalPaid
@@ -243,6 +249,7 @@ class RentalManager: ObservableObject {
             properties[propIndex].isVacant = false
             properties[propIndex].tenantId = finalTenant.id
         }
+        
         if let index = tenants.firstIndex(where: { $0.id == finalTenant.id }) {
             let oldTenant = tenants[index]
             if let oldPropId = oldTenant.propertyId, oldPropId != finalTenant.propertyId, let propIndex = properties.firstIndex(where: { $0.id == oldPropId }) {
@@ -253,6 +260,12 @@ class RentalManager: ObservableObject {
         } else {
             tenants.append(finalTenant)
         }
+        
+        NotificationManager.instance.cancelLeaseExpiryNotification(for: finalTenant)
+        if enableLeaseExpiryReminders {
+            NotificationManager.instance.scheduleLeaseExpiryNotification(for: finalTenant)
+        }
+        
         saveData()
     }
     
@@ -260,6 +273,7 @@ class RentalManager: ObservableObject {
         let tenantsToDelete = offsets.map { tenants[$0] }
         for tenant in tenantsToDelete {
             NotificationManager.instance.cancelNotification(for: tenant.id)
+            NotificationManager.instance.cancelLeaseExpiryNotification(for: tenant)
             reminderScheduledForTenantIDs.remove(tenant.id)
         }
         let idsToDelete = tenantsToDelete.map { $0.id }
@@ -363,6 +377,9 @@ class RentalManager: ObservableObject {
 
     func addMaintenanceRequest(_ request: MaintenanceRequest) {
         maintenanceRequests.insert(request, at: 0)
+        if enableMaintenanceReminders {
+            NotificationManager.instance.scheduleMaintenanceFollowUp(for: request)
+        }
         saveData()
     }
     
@@ -376,13 +393,20 @@ class RentalManager: ObservableObject {
     func resolveMaintenanceRequest(_ request: MaintenanceRequest) {
         if let index = maintenanceRequests.firstIndex(where: { $0.id == request.id }) {
             maintenanceRequests[index].isResolved = true
+            NotificationManager.instance.cancelMaintenanceFollowUp(for: request)
             saveData()
         }
     }
     
     func deleteMaintenanceRequest(at offsets: IndexSet) {
-        let maintenanceRequestsToDelete = offsets.map { maintenanceRequests[$0] }
-        let idsToDelete = maintenanceRequestsToDelete.map { $0.id }
+        let openRequests = maintenanceRequests.filter { !$0.isResolved }
+        let requestsToDelete = offsets.map { openRequests[$0] }
+        let idsToDelete = Set(requestsToDelete.map { $0.id })
+        
+        for request in requestsToDelete {
+            NotificationManager.instance.cancelMaintenanceFollowUp(for: request)
+        }
+        
         maintenanceRequests.removeAll { idsToDelete.contains($0.id) }
         saveData()
     }
@@ -417,16 +441,32 @@ class RentalManager: ObservableObject {
     }
     
     func saveProperty(property: Property) {
+        let oldProperty = getProperty(byId: property.id)
+        
         if let index = properties.firstIndex(where: { $0.id == property.id }) {
             properties[index] = property
         } else {
             properties.append(property)
         }
+        
+        if let old = oldProperty {
+            NotificationManager.instance.cancelAllDeadlineNotifications(forProperty: old)
+        }
+        if enableDeadlineReminders {
+            for deadline in property.deadlines {
+                NotificationManager.instance.schedulePropertyDeadlineNotification(for: property, deadline: deadline)
+            }
+        }
         saveData()
     }
     
     func deleteProperty(at offsets: IndexSet) {
-        let idsToDelete = offsets.map { properties[$0].id }
+        let propertiesToDelete = offsets.map { properties[$0] }
+        for property in propertiesToDelete {
+            NotificationManager.instance.cancelAllDeadlineNotifications(forProperty: property)
+        }
+        
+        let idsToDelete = propertiesToDelete.map { $0.id }
         tenants = tenants.map { tenant in
             var mutableTenant = tenant
             if let propId = mutableTenant.propertyId, idsToDelete.contains(propId) {
@@ -490,6 +530,57 @@ class NotificationManager {
         let request = UNNotificationRequest(identifier: "appt-\(appointment.id.uuidString)", content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
     }
+    
+    func scheduleLeaseExpiryNotification(for tenant: Tenant) {
+        let content = UNMutableNotificationContent()
+        content.title = "Lease Expiry Reminder"
+        content.body = "The lease for \(tenant.name) is ending on \(tenant.leaseEndDate.formatted(date: .abbreviated, time: .omitted))."
+        content.sound = .default
+
+        guard let reminderDate = Calendar.current.date(byAdding: .day, value: -60, to: tenant.leaseEndDate) else { return }
+        guard reminderDate > Date() else { return }
+        
+        var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: reminderDate)
+        dateComponents.hour = 9
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let request = UNNotificationRequest(identifier: "lease-\(tenant.id.uuidString)", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    func scheduleMaintenanceFollowUp(for request: MaintenanceRequest) {
+        let content = UNMutableNotificationContent()
+        content.title = "Maintenance Follow-up"
+        content.body = "The maintenance request '\(request.description)' has been open for 3 days."
+        content.sound = .default
+
+        guard let reminderDate = Calendar.current.date(byAdding: .day, value: 3, to: request.reportedDate) else { return }
+        guard reminderDate > Date() else { return }
+
+        var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: reminderDate)
+        dateComponents.hour = 9
+        
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let notificationRequest = UNNotificationRequest(identifier: "maintenance-\(request.id.uuidString)", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(notificationRequest)
+    }
+    
+    func schedulePropertyDeadlineNotification(for property: Property, deadline: PropertyDeadline) {
+        let content = UNMutableNotificationContent()
+        content.title = "Property Deadline Reminder"
+        content.body = "'\(deadline.title)' for \(property.name) is due on \(deadline.expiryDate.formatted(date: .abbreviated, time: .omitted))."
+        content.sound = .default
+        
+        guard let reminderDate = Calendar.current.date(byAdding: .day, value: -30, to: deadline.expiryDate) else { return }
+        guard reminderDate > Date() else { return }
+
+        var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: reminderDate)
+        dateComponents.hour = 9
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let request = UNNotificationRequest(identifier: "deadline-\(property.id.uuidString)-\(deadline.id.uuidString)", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
 
     func cancelNotification(for tenantId: UUID) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["rent-\(tenantId.uuidString)"])
@@ -497,5 +588,22 @@ class NotificationManager {
     
     func cancelAppointmentReminder(for appointmentId: UUID) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["appt-\(appointmentId.uuidString)"])
+    }
+    
+    func cancelLeaseExpiryNotification(for tenant: Tenant) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["lease-\(tenant.id.uuidString)"])
+    }
+    
+    func cancelMaintenanceFollowUp(for request: MaintenanceRequest) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["maintenance-\(request.id.uuidString)"])
+    }
+    
+    func cancelPropertyDeadlineNotification(for property: Property, deadline: PropertyDeadline) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["deadline-\(property.id.uuidString)-\(deadline.id.uuidString)"])
+    }
+    
+    func cancelAllDeadlineNotifications(forProperty property: Property) {
+        let identifiers = property.deadlines.map { "deadline-\(property.id.uuidString)-\($0.id.uuidString)" }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 }

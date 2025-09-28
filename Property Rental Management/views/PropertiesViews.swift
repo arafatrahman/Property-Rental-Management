@@ -93,6 +93,8 @@ struct AddEditPropertyView: View {
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var imagesData: [Data] = []
     @State private var paymentCycle: PaymentCycle = .monthly
+    @State private var deadlines: [PropertyDeadline] = []
+    @State private var showingAddDeadline = false
     
     var body: some View {
         NavigationView {
@@ -111,6 +113,22 @@ struct AddEditPropertyView: View {
                            Text(cycle.rawValue).tag(cycle)
                        }
                    }
+                }
+                
+                Section("Important Deadlines") {
+                    ForEach(deadlines) { deadline in
+                        VStack(alignment: .leading) {
+                            Text(deadline.title).bold()
+                            Text("Expires: \(deadline.expiryDate.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .onDelete(perform: deleteDeadline)
+                    
+                    Button("Add Deadline") {
+                        showingAddDeadline = true
+                    }
                 }
                 
                 Section("Property Photos") {
@@ -145,20 +163,29 @@ struct AddEditPropertyView: View {
                 }
             }
             .onAppear(perform: loadPropertyData)
+            .sheet(isPresented: $showingAddDeadline) {
+                AddDeadlineView { newDeadline in
+                    deadlines.append(newDeadline)
+                }
+            }
         }
+    }
+    
+    private func deleteDeadline(at offsets: IndexSet) {
+        deadlines.remove(atOffsets: offsets)
     }
     
     private func loadPropertyData() {
         if let p = property {
             id = p.id; name = p.name; address = p.address
             rentAmountString = String(p.rentAmount); imagesData = p.imagesData
-            paymentCycle = p.paymentCycle
+            paymentCycle = p.paymentCycle; deadlines = p.deadlines
         }
     }
     
     private func save() {
         let rent = Double(rentAmountString) ?? 0.0
-        let newProperty = Property(id: id ?? UUID(), name: name, address: address, rentAmount: rent, isVacant: property?.isVacant ?? true, tenantId: property?.tenantId, imagesData: imagesData, paymentCycle: paymentCycle)
+        let newProperty = Property(id: id ?? UUID(), name: name, address: address, rentAmount: rent, isVacant: property?.isVacant ?? true, tenantId: property?.tenantId, imagesData: imagesData, paymentCycle: paymentCycle, deadlines: deadlines)
         manager.saveProperty(property: newProperty)
         dismiss()
     }
@@ -202,6 +229,19 @@ struct PropertyDetailView: View {
                          VStack(alignment: .leading) {
                              Text(tenant.name).font(.headline)
                              Text(tenant.email).font(.subheadline)
+                        }
+                    }
+                }
+            }
+            
+            if !property.deadlines.isEmpty {
+                Section("Upcoming Deadlines") {
+                    ForEach(property.deadlines.sorted(by: { $0.expiryDate < $1.expiryDate })) { deadline in
+                        HStack {
+                            Text(deadline.title)
+                            Spacer()
+                            Text(deadline.expiryDate.formatted(date: .abbreviated, time: .omitted))
+                                .foregroundColor(.secondary)
                         }
                     }
                 }

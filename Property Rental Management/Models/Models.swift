@@ -72,6 +72,12 @@ struct TransactionCategory: Identifiable, Codable, Hashable {
     var iconName: String
 }
 
+struct PropertyDeadline: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var title: String
+    var expiryDate: Date
+}
+
 struct Property: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -81,6 +87,7 @@ struct Property: Identifiable, Codable, Hashable {
     var tenantId: UUID?
     var imagesData: [Data] = []
     var paymentCycle: PaymentCycle = .monthly
+    var deadlines: [PropertyDeadline] = []
 }
 
 struct Tenant: Identifiable, Codable, Hashable {

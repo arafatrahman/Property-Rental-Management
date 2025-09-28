@@ -99,8 +99,6 @@ struct AddEditTenantView: View {
     @State private var selectedPropertyId: UUID?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var imageData: Data?
-    
-    // ✅ MODIFIED: Initial value is now blank instead of "0.0".
     @State private var amountOwedString: String = ""
     @State private var depositAmountString: String = ""
 
@@ -128,7 +126,6 @@ struct AddEditTenantView: View {
                     TextField("Email Address", text: $email).keyboardType(.emailAddress)
                 }
                 
-                // ✅ MODIFIED: This section now uses explicit labels for clarity.
                 Section("Lease Details") {
                     DatePicker("Lease Start", selection: $leaseStartDate, displayedComponents: .date)
                     DatePicker("Lease End", selection: $leaseEndDate, displayedComponents: .date)
@@ -163,6 +160,13 @@ struct AddEditTenantView: View {
             .onChange(of: selectedPhoto) { _, newItem in
                 Task { if let data = try? await newItem?.loadTransferable(type: Data.self) { imageData = data } }
             }
+            .onChange(of: selectedPropertyId) { _, newPropertyId in
+                guard tenant == nil, amountOwedString.isEmpty, let newPropertyId = newPropertyId else { return }
+                
+                if let property = manager.getProperty(byId: newPropertyId) {
+                    amountOwedString = String(property.rentAmount)
+                }
+            }
             .onAppear(perform: loadTenantData)
         }
     }
@@ -172,7 +176,6 @@ struct AddEditTenantView: View {
             id = t.id; name = t.name; phone = t.phone; email = t.email
             leaseStartDate = t.leaseStartDate; leaseEndDate = t.leaseEndDate
             selectedPropertyId = t.propertyId; imageData = t.imageData
-            // Show 0 values when editing, but leave blank if value is 0 and it's a new tenant (which is handled by the @State initializer)
             amountOwedString = String(t.amountOwed)
             depositAmountString = String(t.depositAmount)
         }
@@ -206,7 +209,7 @@ struct TenantDetailView: View {
             }
             
             Section("Financials") {
-                InfoRowView(label: "Amount Owed", value: tenant.amountOwed.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
+                InfoRowView(label: "Current Balance", value: tenant.amountOwed.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
                 InfoRowView(label: "Next Payment Due", value: tenant.nextDueDate.formatted(date: .abbreviated, time: .omitted))
                 
                 if tenant.depositAmount > 0 {
