@@ -170,6 +170,7 @@ struct PropertyDetailView: View {
     let property: Property
     @State private var showingAddEditProperty = false
     @State private var expenseToEdit: Expense?
+    @State private var incomeToEdit: Income?
 
     var body: some View {
         List {
@@ -206,12 +207,56 @@ struct PropertyDetailView: View {
                 }
             }
             
+            Section("Income") {
+                let propertyIncomes = manager.incomes.filter { $0.propertyId == property.id }.sorted(by: { $0.date > $1.date })
+                if propertyIncomes.isEmpty {
+                    Text("No income logged for this property.")
+                } else {
+                    ForEach(propertyIncomes) { income in
+                        HStack(spacing: 15) {
+                            let category = manager.getCategory(byId: income.categoryId)
+                            let iconName = category?.iconName ?? "questionmark.circle.fill"
+                            
+                            Image(systemName: iconName)
+                                .font(.headline)
+                                .frame(width: 40, height: 40)
+                                .background(Color.green.opacity(0.1))
+                                .clipShape(Circle())
+                                .foregroundColor(.green)
+
+                            VStack(alignment: .leading) {
+                                Text(income.description).font(.headline)
+                                Text(category?.name ?? "Uncategorized").font(.caption).foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text(income.amount.formattedAsCurrency(symbol: settings.currencySymbol.rawValue))
+                                .foregroundColor(.green)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 4)
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                manager.deleteIncome(income)
+                            } label: {
+                                Label("Delete", systemImage: "trash.fill")
+                            }
+                            Button {
+                                incomeToEdit = income
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }.tint(.blue)
+                        }
+                    }
+                }
+            }
+            
             Section("Expenses") {
-                let propertyExpenses = manager.expenses.filter { $0.propertyId == property.id }
+                let propertyExpenses = manager.expenses.filter { $0.propertyId == property.id }.sorted(by: { $0.date > $1.date })
                 if propertyExpenses.isEmpty {
                     Text("No expenses logged for this property.")
                 } else {
-                    // ✅ REDESIGNED: The expense row now matches the design from FinancialsView
                     ForEach(propertyExpenses) { expense in
                         HStack(spacing: 15) {
                             let category = manager.getCategory(byId: expense.categoryId)
@@ -264,6 +309,9 @@ struct PropertyDetailView: View {
         }
         .sheet(item: $expenseToEdit) { expense in
             EditExpenseView(expense: expense)
+        }
+        .sheet(item: $incomeToEdit) { income in
+            EditIncomeView(income: income)
         }
     }
 }

@@ -34,6 +34,9 @@ class RentalManager: ObservableObject {
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
 
+    @AppStorage("enablePaymentReminders") private var enablePaymentReminders: Bool = true
+    @AppStorage("enableAppointmentReminders") private var enableAppointmentReminders: Bool = true
+    
     private var dataFileURL: URL {
         do {
             let documentsDirectory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -351,6 +354,8 @@ class RentalManager: ObservableObject {
     }
     
     func scheduleReminder(for tenant: Tenant) {
+        guard enablePaymentReminders else { return }
+        
         guard let property = getProperty(for: tenant) else { return }
         NotificationManager.instance.scheduleNotification(for: tenant, property: property)
         reminderScheduledForTenantIDs.insert(tenant.id)
@@ -385,7 +390,10 @@ class RentalManager: ObservableObject {
     func addAppointment(_ appointment: Appointment) {
         appointments.append(appointment)
         appointments.sort(by: { $0.date < $1.date })
-        NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+        
+        if enableAppointmentReminders {
+            NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+        }
         saveData()
     }
     
@@ -393,8 +401,12 @@ class RentalManager: ObservableObject {
         guard let index = appointments.firstIndex(where: { $0.id == appointment.id }) else { return }
         appointments[index] = appointment
         appointments.sort(by: { $0.date < $1.date })
+        
         NotificationManager.instance.cancelAppointmentReminder(for: appointment.id)
-        NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+        
+        if enableAppointmentReminders {
+            NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+        }
         saveData()
     }
 

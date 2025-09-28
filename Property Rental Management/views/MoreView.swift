@@ -23,6 +23,9 @@ struct MoreView: View {
                     NavigationLink(destination: CategoriesView()) {
                         Label("Manage Categories", systemImage: "folder.fill")
                     }
+                    NavigationLink(destination: NotificationSettingsView()) {
+                        Label("Notifications", systemImage: "bell.badge.fill")
+                    }
                     NavigationLink(destination: SettingsView()) {
                         Label("Settings", systemImage: "gear")
                     }
