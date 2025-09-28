@@ -37,10 +37,15 @@ class RentalManager: ObservableObject {
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
 
-    private let propertiesKey = "propertiesKey", tenantsKey = "tenantsKey"
-    private let incomesKey = "incomesKey", expensesKey = "expensesKey"
-    private let maintenanceKey = "maintenanceKey", appointmentsKey = "appointmentsKey"
-    private let categoriesKey = "categoriesKey"
+    // ✅ MODIFIED: Switched from UserDefaults keys to a single file URL for data persistence
+    private var dataFileURL: URL {
+        do {
+            let documentsDirectory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            return documentsDirectory.appendingPathComponent("RentalManagementData.json")
+        } catch {
+            fatalError("Could not find or create documents directory.")
+        }
+    }
     
     var totalProperties: Int { properties.count }
     var occupiedProperties: Int { properties.filter { !$0.isVacant }.count }
@@ -58,31 +63,90 @@ class RentalManager: ObservableObject {
         updateAllTenantBalances()
     }
 
+    // ✅ REDESIGNED: Saves all data to a single JSON file
     func saveData() {
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
-        if let d = try? encoder.encode(properties) { UserDefaults.standard.set(d, forKey: propertiesKey) }
-        if let d = try? encoder.encode(tenants) { UserDefaults.standard.set(d, forKey: tenantsKey) }
-        if let d = try? encoder.encode(incomes) { UserDefaults.standard.set(d, forKey: incomesKey) }
-        if let d = try? encoder.encode(expenses) { UserDefaults.standard.set(d, forKey: expensesKey) }
-        if let d = try? encoder.encode(transactionCategories) { UserDefaults.standard.set(d, forKey: categoriesKey) }
-        if let d = try? encoder.encode(maintenanceRequests) { UserDefaults.standard.set(d, forKey: maintenanceKey) }
-        if let d = try? encoder.encode(appointments) { UserDefaults.standard.set(d, forKey: appointmentsKey) }
+        let appData = AppData(
+            properties: self.properties,
+            tenants: self.tenants,
+            incomes: self.incomes,
+            expenses: self.expenses,
+            transactionCategories: self.transactionCategories,
+            maintenanceRequests: self.maintenanceRequests,
+            appointments: self.appointments
+        )
+        
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        
+        do {
+            let data = try encoder.encode(appData)
+            try data.write(to: dataFileURL, options: [.atomicWrite, .completeFileProtection])
+        } catch {
+            print("Error saving data: \(error.localizedDescription)")
+        }
     }
 
+    // ✅ REDESIGNED: Loads all data from a single JSON file
     func loadData() {
+        guard FileManager.default.fileExists(atPath: dataFileURL.path) else {
+            if transactionCategories.isEmpty { loadDefaultCategories() }
+            return
+        }
+        
+        do {
+            let data = try Data(contentsOf: dataFileURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let appData = try decoder.decode(AppData.self, from: data)
+            
+            self.properties = appData.properties
+            self.tenants = appData.tenants
+            self.incomes = appData.incomes
+            self.expenses = appData.expenses
+            self.transactionCategories = appData.transactionCategories
+            self.maintenanceRequests = appData.maintenanceRequests
+            self.appointments = appData.appointments
+            
+            if self.transactionCategories.isEmpty { loadDefaultCategories() }
+            
+        } catch {
+            print("Error loading data: \(error.localizedDescription)")
+            if transactionCategories.isEmpty { loadDefaultCategories() }
+        }
+    }
+    
+    // ✅ NEW: Exports data for sharing or backup
+    func exportData() -> Data? {
+        do {
+            let data = try Data(contentsOf: dataFileURL)
+            return data
+        } catch {
+            print("Could not read data file for export: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    // ✅ NEW: Imports data from a file, overwriting existing data
+    func importData(from data: Data) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        
-        if let d=UserDefaults.standard.data(forKey: propertiesKey), let dec=try? decoder.decode([Property].self, from:d){ properties = dec }
-        if let d=UserDefaults.standard.data(forKey: tenantsKey), let dec=try? decoder.decode([Tenant].self, from:d){ tenants = dec }
-        if let d=UserDefaults.standard.data(forKey: incomesKey), let dec=try? decoder.decode([Income].self, from:d){ incomes = dec }
-        if let d=UserDefaults.standard.data(forKey: expensesKey), let dec=try? decoder.decode([Expense].self, from:d){ expenses = dec }
-        if let d=UserDefaults.standard.data(forKey: categoriesKey), let dec=try? decoder.decode([TransactionCategory].self, from:d){ transactionCategories = dec }
-        if let d=UserDefaults.standard.data(forKey: maintenanceKey), let dec=try? decoder.decode([MaintenanceRequest].self, from:d){ maintenanceRequests = dec }
-        if let d=UserDefaults.standard.data(forKey: appointmentsKey), let dec=try? decoder.decode([Appointment].self, from:d){ appointments = dec }
-
-        if transactionCategories.isEmpty { loadDefaultCategories() }
-        if properties.isEmpty && tenants.isEmpty { loadMockData(); saveData() }
+        do {
+            let appData = try decoder.decode(AppData.self, from: data)
+            self.properties = appData.properties
+            self.tenants = appData.tenants
+            self.incomes = appData.incomes
+            self.expenses = appData.expenses
+            self.transactionCategories = appData.transactionCategories
+            self.maintenanceRequests = appData.maintenanceRequests
+            self.appointments = appData.appointments
+            
+            // After importing, save it as the new local state
+            saveData()
+            
+        } catch {
+            print("Error importing data: \(error.localizedDescription)")
+        }
     }
     
     func updateAllTenantBalances() {
@@ -356,25 +420,7 @@ class RentalManager: ObservableObject {
     func getTenant(byId id: UUID) -> Tenant? { tenants.first { $0.id == id } }
     func getProperty(byId id: UUID) -> Property? { properties.first { $0.id == id } }
     
-    private func loadMockData() {
-        let t1Id=UUID(), t2Id=UUID(), t3Id=UUID(); let p1Id=UUID(), p2Id=UUID(), p3Id=UUID()
-        let today = Date(); let lastMonth = Calendar.current.date(byAdding: .month, value: -1, to: today)!
-        let overdueDate = Calendar.current.date(byAdding: .day, value: -3, to: today)!
-        let prop1 = Property(id:p1Id, name:"Sunrise Villa", address:"123 Sunny Lane", rentAmount:2500, isVacant:false, tenantId:t1Id, paymentCycle: .monthly)
-        let prop2 = Property(id:p2Id, name:"Downtown Loft", address:"456 Urban St", rentAmount:1800, isVacant:false, tenantId:t2Id, paymentCycle: .monthly)
-        let prop3 = Property(id:p3Id, name:"Oakside Cottage", address:"789 Forest Rd", rentAmount:2100, isVacant:false, tenantId: t3Id, paymentCycle: .weekly)
-        properties = [prop1, prop2, prop3]
-        tenants = [Tenant(id:t1Id, name:"John Appleseed", phone:"555-123-4567", email:"john@example.com", propertyId:p1Id, nextDueDate: today), Tenant(id:t2Id, name:"Jane Doe", phone:"555-987-6543", email:"jane@example.com", propertyId:p2Id, nextDueDate:overdueDate, amountOwed: 1800), Tenant(id:t3Id, name:"Peter Jones", phone:"555-555-5555", email:"peter@example.com", propertyId: p3Id, nextDueDate: Calendar.current.date(byAdding: .day, value: 10, to: today)!)]
-        
-        let rentCategoryId = transactionCategories.first { $0.name == "Rent Payment" }?.id
-        incomes = [Income(description: "Rent", amount:2500, date:lastMonth, tenantId:t1Id, propertyId:p1Id, categoryId: rentCategoryId), Income(description: "Rent", amount:1800, date:lastMonth, tenantId:t2Id, propertyId:p2Id, categoryId: rentCategoryId), Income(description: "Rent", amount:2500, date: today, tenantId:t1Id, propertyId:p1Id, categoryId: rentCategoryId)]
-        
-        let repairCategoryId = transactionCategories.first { $0.name == "Repairs" }?.id
-        expenses = [Expense(description:"Plumbing Repair", amount:350.00, date:Calendar.current.date(byAdding: .day, value:-10, to:today)!, propertyId:p1Id, categoryId: repairCategoryId), Expense(description:"Lawn Care", amount:75.00, date:Calendar.current.date(byAdding:.day, value:-5, to:today)!, propertyId:p3Id)]
-        
-        maintenanceRequests = [MaintenanceRequest(propertyId: p2Id, description: "Leaky faucet in kitchen", isResolved: false, reportedDate: Calendar.current.date(byAdding: .day, value: -2, to: today)!)]
-        appointments = [Appointment(property: prop1, title: "Prospective Tenant Viewing", date: Calendar.current.date(byAdding: .day, value: 1, to: today)!, status: .scheduled)]
-    }
+    // ❌ REMOVED: The entire loadMockData function has been deleted to prevent dummy data.
 }
 
 

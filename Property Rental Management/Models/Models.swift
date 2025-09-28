@@ -7,6 +7,18 @@
 import Foundation
 import SwiftUI
 
+// ✅ NEW: A container for all app data to simplify saving and loading.
+struct AppData: Codable {
+    var properties: [Property] = []
+    var tenants: [Tenant] = []
+    var incomes: [Income] = []
+    var expenses: [Expense] = []
+    var transactionCategories: [TransactionCategory] = []
+    var maintenanceRequests: [MaintenanceRequest] = []
+    var appointments: [Appointment] = []
+}
+
+
 // MARK: - Enums
 enum TransactionType: String, Codable, CaseIterable {
     case income = "Income"
@@ -113,7 +125,6 @@ struct Expense: Identifiable, Codable, Hashable {
     var date: Date = Date()
     var propertyId: UUID
     var categoryId: UUID?
-    // ✅ NEW: Flag to indicate if this expense should be added to the tenant's balance.
     var isBillableToTenant: Bool = false
 }
 
