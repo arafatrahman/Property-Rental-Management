@@ -144,6 +144,13 @@ struct AddEditTenantView: View {
                     TextField("Email Address", text: $email).keyboardType(.emailAddress)
                 }
                 
+                Section("Assign to Property") {
+                    Picker("Property", selection: $selectedPropertyId) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(manager.properties.filter { $0.isVacant || $0.tenantId == self.id }) { Text($0.name).tag($0.id as UUID?) }
+                    }
+                }
+                
                 Section("Lease Details") {
                     DatePicker("Lease Start", selection: $leaseStartDate, displayedComponents: .date)
                     DatePicker("Lease End", selection: $leaseEndDate, displayedComponents: .date)
@@ -160,13 +167,6 @@ struct AddEditTenantView: View {
                         TextField("0", text: $depositAmountString)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                    }
-                }
-                
-                Section("Assign to Property") {
-                    Picker("Property", selection: $selectedPropertyId) {
-                        Text("None").tag(UUID?.none)
-                        ForEach(manager.properties.filter { $0.isVacant || $0.tenantId == self.id }) { Text($0.name).tag($0.id as UUID?) }
                     }
                 }
             }
