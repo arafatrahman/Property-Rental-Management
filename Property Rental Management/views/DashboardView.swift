@@ -9,29 +9,63 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var manager: RentalManager
-    @EnvironmentObject var settings: SettingsManager // ✅ ADDED: To access currency settings
+    @EnvironmentObject var settings: SettingsManager
+
+    // ✅ ADDED: State variables to control the presentation of each "Add" sheet.
+    @State private var showingAddIncome = false
+    @State private var showingAddExpense = false
+    @State private var showingAddTenant = false
+    @State private var showingAddProperty = false
+    @State private var showingAddAppointment = false
+    @State private var showingAddMaintenance = false
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 25) {
-                    HStack {
+                    // ✅ MODIFIED: The header HStack now includes the Analytics and Quick Add buttons.
+                    HStack(alignment: .center) {
                         Text("Dashboard").font(.largeTitle).bold()
                         Spacer()
-                    }.padding([.horizontal, .top])
+
+                        NavigationLink(destination: AnalyticsView()) {
+                            Image(systemName: "chart.bar.xaxis")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .padding(8)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(Circle())
+                        }
+                        
+                        Menu {
+                            Button { showingAddProperty = true } label: { Label("New Property", systemImage: "house.fill") }
+                            Button { showingAddTenant = true } label: { Label("New Tenant", systemImage: "person.fill.badge.plus") }
+                            Divider()
+                            Button { showingAddIncome = true } label: { Label("Log Income", systemImage: "arrow.up.right.circle.fill") }
+                            Button { showingAddExpense = true } label: { Label("Log Expense", systemImage: "arrow.down.right.circle.fill") }
+                            Divider()
+                            Button { showingAddAppointment = true } label: { Label("New Appointment", systemImage: "calendar.badge.plus") }
+                            Button { showingAddMaintenance = true } label: { Label("New Maintenance", systemImage: "wrench.and.screwdriver.fill") }
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .padding(8)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(Circle())
+                        }
+                    }
+                    .padding([.horizontal, .top])
                     
                     VStack(spacing: 15) {
                         NavigationLink(destination: FinancialsView(initialFilter: .all)) {
-                            // ✅ MODIFIED: Uses the selected currency
                             DashboardCardView(title: "Net Income", value: manager.netIncome.formattedAsCurrency(symbol: settings.currencySymbol.rawValue), icon: "scalemass.fill", color: .indigo)
                         }
                         HStack {
                             NavigationLink(destination: FinancialsView(initialFilter: .income)) {
-                                // ✅ MODIFIED: Uses the selected currency
                                 DashboardCardView(title: "Total Income", value: manager.totalIncome.formattedAsCurrency(symbol: settings.currencySymbol.rawValue), icon: "arrow.up.right", color: .green)
                             }
                             NavigationLink(destination: FinancialsView(initialFilter: .expenses)) {
-                                // ✅ MODIFIED: Uses the selected currency
                                 DashboardCardView(title: "Total Expenses", value: manager.totalExpenses.formattedAsCurrency(symbol: settings.currencySymbol.rawValue), icon: "arrow.down.right", color: .red)
                             }
                         }
@@ -54,10 +88,19 @@ struct DashboardView: View {
                            NavigationLink(destination: ScheduleView()) { DashboardCardView(title: "Appointments", value: "\(manager.upcomingAppointments)", icon: "calendar.badge.plus", color: .purple) }
                         }
                     }.padding(.horizontal)
-                }.padding(.vertical)
+                }
+                .padding(.vertical)
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarHidden(true)
-        }.accentColor(.primary)
+            // ✅ ADDED: Sheet modifiers to present the correct view when a menu item is tapped.
+            .sheet(isPresented: $showingAddIncome) { AddIncomeView() }
+            .sheet(isPresented: $showingAddExpense) { AddExpenseView() }
+            .sheet(isPresented: $showingAddTenant) { AddEditTenantView(tenant: nil) }
+            .sheet(isPresented: $showingAddProperty) { AddEditPropertyView(property: nil) }
+            .sheet(isPresented: $showingAddAppointment) { AddAppointmentView() }
+            .sheet(isPresented: $showingAddMaintenance) { AddMaintenanceRequestView() }
+        }
+        .accentColor(.primary)
     }
 }
