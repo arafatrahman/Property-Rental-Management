@@ -8,6 +8,7 @@ import Foundation
 import Combine
 import UserNotifications
 import SwiftUI
+import Firebase
 
 class SettingsManager: ObservableObject {
     @AppStorage("currencySymbol") var currencySymbolRaw: String = CurrencySymbol.usd.rawValue
@@ -33,6 +34,9 @@ class RentalManager: ObservableObject {
     @Published var maintenanceRequests: [MaintenanceRequest] = []
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
+    
+    @ObservedObject var firebaseManager = FirebaseManager()
+
 
     @AppStorage("enablePaymentReminders") private var enablePaymentReminders: Bool = true
     @AppStorage("enableAppointmentReminders") private var enableAppointmentReminders: Bool = true
@@ -61,12 +65,22 @@ class RentalManager: ObservableObject {
     var netIncome: Double { totalIncome - totalExpenses }
     
     init() {
-        loadData()
+        if !firebaseManager.isSignedIn{
+            loadData()
+        }
         updateAllTenantBalances()
     }
 
     func saveData() {
-        let appData = AppData(
+        if firebaseManager.isSignedIn {
+            saveDataToFirebase()
+        } else {
+            saveDataLocally()
+        }
+    }
+    
+    private func appData() -> AppData {
+        return AppData(
             properties: self.properties,
             tenants: self.tenants,
             incomes: self.incomes,
@@ -75,13 +89,15 @@ class RentalManager: ObservableObject {
             maintenanceRequests: self.maintenanceRequests,
             appointments: self.appointments
         )
-        
+    }
+
+    private func saveDataLocally() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = .prettyPrinted
         
         do {
-            let data = try encoder.encode(appData)
+            let data = try encoder.encode(appData())
             try data.write(to: dataFileURL, options: [.atomicWrite, .completeFileProtection])
         } catch {
             print("Error saving data: \(error.localizedDescription)")
@@ -89,6 +105,14 @@ class RentalManager: ObservableObject {
     }
 
     func loadData() {
+        if firebaseManager.isSignedIn {
+            loadDataFromFirebase()
+        } else {
+            loadDataLocally()
+        }
+    }
+    
+    private func loadDataLocally() {
         guard FileManager.default.fileExists(atPath: dataFileURL.path) else {
             if transactionCategories.isEmpty { loadDefaultCategories() }
             return
@@ -116,6 +140,29 @@ class RentalManager: ObservableObject {
         }
     }
     
+    func loadDataFromFirebase() {
+        firebaseManager.loadData { [weak self] appData in
+            if let appData = appData {
+                self?.properties = appData.properties
+                self?.tenants = appData.tenants
+                self?.incomes = appData.incomes
+                self?.expenses = appData.expenses
+                self?.transactionCategories = appData.transactionCategories
+                self?.maintenanceRequests = appData.maintenanceRequests
+                self?.appointments = appData.appointments
+            } else {
+                // Handle case where there's no data in Firebase, maybe load defaults
+                if self?.transactionCategories.isEmpty ?? true {
+                    self?.loadDefaultCategories()
+                }
+            }
+        }
+    }
+    
+    private func saveDataToFirebase() {
+        firebaseManager.saveData(appData: appData())
+    }
+
     func exportData() -> Data? {
         do {
             let data = try Data(contentsOf: dataFileURL)

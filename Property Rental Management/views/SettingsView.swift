@@ -7,8 +7,9 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import FirebaseAuth
 
-// ✅ ADDED: A helper document struct for the fileExporter
+// A helper document struct for the fileExporter
 struct DataDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
     var data: Data
@@ -32,16 +33,37 @@ struct DataDocument: FileDocument {
 
 struct SettingsView: View {
     @EnvironmentObject var settingsManager: SettingsManager
-    @EnvironmentObject var manager: RentalManager // ✅ ADDED: To access manager functions
+    @EnvironmentObject var manager: RentalManager
+    @EnvironmentObject var firebaseManager: FirebaseManager
     
-    // ✅ ADDED: State for managing import/export sheets and alerts
+    // ✅ ADDED: Access to the guest mode flag
+    @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
+    
     @State private var showingExporter = false
     @State private var showingImporter = false
     @State private var showingImportAlert = false
     @State private var importedData: Data?
+    @State private var showAuthentication = false
+
 
     var body: some View {
         Form {
+            Section("Account") {
+                if firebaseManager.isSignedIn {
+                    Text("Signed in as \(Auth.auth().currentUser?.email ?? "...")")
+                    Button("Sign Out") {
+                        firebaseManager.signOut()
+                        // ✅ ADDED: Reset guest mode on sign out
+                        hasChosenGuestMode = false
+                    }
+                } else {
+                    Button("Sign In / Sign Up") {
+                        // This will bring back the authentication view
+                        hasChosenGuestMode = false
+                    }
+                }
+            }
+            
             Section("Currency") {
                 Picker("Currency Symbol", selection: $settingsManager.currencySymbol) {
                     ForEach(CurrencySymbol.allCases) { symbol in
@@ -50,7 +72,6 @@ struct SettingsView: View {
                 }
             }
             
-            // ✅ ADDED: New section for Data Management features
             Section("Data Management") {
                 Button {
                     showingExporter = true
@@ -66,9 +87,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        // ✅ ADDED: Modifiers for handling file operations
         .fileExporter(isPresented: $showingExporter, document: DataDocument(data: manager.exportData() ?? Data()), contentType: .json, defaultFilename: "RentalDataBackup.json") { result in
-            // You can optionally handle the result of the export here
             switch result {
             case .success(let url):
                 print("Exported successfully to \(url)")
