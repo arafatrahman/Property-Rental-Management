@@ -10,21 +10,26 @@ import Firebase
 
 @main
 struct RentalManagementApp: App {
-    @StateObject private var rentalManager = RentalManager()
+    @StateObject private var firebaseManager: FirebaseManager
+    @StateObject private var rentalManager: RentalManager
+    
     @StateObject private var settingsManager = SettingsManager()
-    @StateObject private var firebaseManager = FirebaseManager()
     @Environment(\.scenePhase) var scenePhase
     
     @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
 
     init() {
         FirebaseApp.configure()
+        
+        let fm = FirebaseManager()
+        _firebaseManager = StateObject(wrappedValue: fm)
+        // ✅ CORRECTED: This now correctly calls the convenience init.
+        _rentalManager = StateObject(wrappedValue: RentalManager(firebaseManager: fm))
     }
 
     var body: some Scene {
         WindowGroup {
             if !firebaseManager.isSignedIn && !hasChosenGuestMode {
-                // ✅ MODIFIED: Pass the setGuestMode function directly
                 AuthenticationView(onContinueAsGuest: setGuestMode)
                     .environmentObject(firebaseManager)
             } else {
@@ -35,7 +40,7 @@ struct RentalManagementApp: App {
                     .onAppear {
                         NotificationManager.instance.requestAuthorization()
                         if firebaseManager.isSignedIn {
-                            rentalManager.loadDataFromFirebase()
+                            rentalManager.loadData()
                         }
                     }
                     .onChange(of: scenePhase) { _, newPhase in
@@ -47,7 +52,6 @@ struct RentalManagementApp: App {
         }
     }
     
-    // ✅ This function is now passed directly to the view
     func setGuestMode() {
         self.hasChosenGuestMode = true
     }

@@ -35,8 +35,7 @@ class RentalManager: ObservableObject {
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
     
-    @ObservedObject var firebaseManager = FirebaseManager()
-
+    private var firebaseManager: FirebaseManager?
 
     @AppStorage("enablePaymentReminders") private var enablePaymentReminders: Bool = true
     @AppStorage("enableAppointmentReminders") private var enableAppointmentReminders: Bool = true
@@ -64,15 +63,21 @@ class RentalManager: ObservableObject {
     var totalExpenses: Double { expenses.reduce(0) { $0 + $1.amount } }
     var netIncome: Double { totalIncome - totalExpenses }
     
+    // ✅ ADDED: A default initializer for previews and local-only mode
     init() {
-        if !firebaseManager.isSignedIn{
-            loadData()
-        }
+        self.firebaseManager = nil
+        loadData()
         updateAllTenantBalances()
+    }
+    
+    // ✅ ADDED: A specific initializer for when the app is running with Firebase
+    convenience init(firebaseManager: FirebaseManager) {
+        self.init()
+        self.firebaseManager = firebaseManager
     }
 
     func saveData() {
-        if firebaseManager.isSignedIn {
+        if let fm = firebaseManager, fm.isSignedIn {
             saveDataToFirebase()
         } else {
             saveDataLocally()
@@ -99,13 +104,14 @@ class RentalManager: ObservableObject {
         do {
             let data = try encoder.encode(appData())
             try data.write(to: dataFileURL, options: [.atomicWrite, .completeFileProtection])
+            print("Data saved locally.")
         } catch {
             print("Error saving data: \(error.localizedDescription)")
         }
     }
 
     func loadData() {
-        if firebaseManager.isSignedIn {
+        if let fm = firebaseManager, fm.isSignedIn {
             loadDataFromFirebase()
         } else {
             loadDataLocally()
@@ -131,7 +137,8 @@ class RentalManager: ObservableObject {
             self.transactionCategories = appData.transactionCategories
             self.maintenanceRequests = appData.maintenanceRequests
             self.appointments = appData.appointments
-            
+            print("Data loaded locally.")
+
             if self.transactionCategories.isEmpty { loadDefaultCategories() }
             
         } catch {
@@ -140,8 +147,8 @@ class RentalManager: ObservableObject {
         }
     }
     
-    func loadDataFromFirebase() {
-        firebaseManager.loadData { [weak self] appData in
+    private func loadDataFromFirebase() {
+        firebaseManager?.loadData { [weak self] appData in
             if let appData = appData {
                 self?.properties = appData.properties
                 self?.tenants = appData.tenants
@@ -150,8 +157,8 @@ class RentalManager: ObservableObject {
                 self?.transactionCategories = appData.transactionCategories
                 self?.maintenanceRequests = appData.maintenanceRequests
                 self?.appointments = appData.appointments
+                print("Data loaded from Firebase.")
             } else {
-                // Handle case where there's no data in Firebase, maybe load defaults
                 if self?.transactionCategories.isEmpty ?? true {
                     self?.loadDefaultCategories()
                 }
@@ -160,7 +167,8 @@ class RentalManager: ObservableObject {
     }
     
     private func saveDataToFirebase() {
-        firebaseManager.saveData(appData: appData())
+        firebaseManager?.saveData(appData: appData())
+        print("Data saved to Firebase.")
     }
 
     func exportData() -> Data? {
