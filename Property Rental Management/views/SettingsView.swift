@@ -36,29 +36,27 @@ struct SettingsView: View {
     @EnvironmentObject var manager: RentalManager
     @EnvironmentObject var firebaseManager: FirebaseManager
     
-    // ✅ ADDED: Access to the guest mode flag
     @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
     
     @State private var showingExporter = false
     @State private var showingImporter = false
     @State private var showingImportAlert = false
     @State private var importedData: Data?
-    @State private var showAuthentication = false
-
 
     var body: some View {
         Form {
             Section("Account") {
-                if firebaseManager.isSignedIn {
+                // ✅ CORRECTED: This now checks the `authState` enum instead of the old boolean.
+                if firebaseManager.authState == .signedIn {
                     Text("Signed in as \(Auth.auth().currentUser?.email ?? "...")")
-                    Button("Sign Out") {
+                    Button("Sign Out", role: .destructive) {
                         firebaseManager.signOut()
-                        // ✅ ADDED: Reset guest mode on sign out
+                        // This will cause the login screen to reappear on next launch
                         hasChosenGuestMode = false
                     }
                 } else {
                     Button("Sign In / Sign Up") {
-                        // This will bring back the authentication view
+                        // Setting this to false will trigger the login view to appear
                         hasChosenGuestMode = false
                     }
                 }

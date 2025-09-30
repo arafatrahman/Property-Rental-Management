@@ -63,21 +63,21 @@ class RentalManager: ObservableObject {
     var totalExpenses: Double { expenses.reduce(0) { $0 + $1.amount } }
     var netIncome: Double { totalIncome - totalExpenses }
     
-    // ✅ ADDED: A default initializer for previews and local-only mode
+    // A default initializer for previews and local-only mode
     init() {
         self.firebaseManager = nil
         loadData()
         updateAllTenantBalances()
     }
     
-    // ✅ ADDED: A specific initializer for when the app is running with Firebase
+    // A specific initializer for when the app is running with Firebase
     convenience init(firebaseManager: FirebaseManager) {
         self.init()
         self.firebaseManager = firebaseManager
     }
 
     func saveData() {
-        if let fm = firebaseManager, fm.isSignedIn {
+        if let fm = firebaseManager, fm.authState == .signedIn {
             saveDataToFirebase()
         } else {
             saveDataLocally()
@@ -111,7 +111,7 @@ class RentalManager: ObservableObject {
     }
 
     func loadData() {
-        if let fm = firebaseManager, fm.isSignedIn {
+        if let fm = firebaseManager, fm.authState == .signedIn {
             loadDataFromFirebase()
         } else {
             loadDataLocally()

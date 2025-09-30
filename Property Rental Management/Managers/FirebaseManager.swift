@@ -11,18 +11,28 @@ import FirebaseFirestore
 import FirebaseAuth
 import Combine
 
+// ✅ ADDED: An enum to represent the different authentication states.
+enum AuthState {
+    case unknown, signedIn, signedOut
+}
+
 class FirebaseManager: ObservableObject {
-    @Published var isSignedIn = false
+    // ✅ MODIFIED: Changed the simple boolean to use the new AuthState enum.
+    @Published var authState: AuthState = .unknown
     private var db = Firestore.firestore()
 
-    // ✅ ADDED: An init() method to start listening for auth changes immediately.
     init() {
-        // This listener is the key. It automatically updates `isSignedIn` whenever a user
-        // signs in or out, which in turn causes the UI to update.
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            self?.isSignedIn = user != nil
+            // ✅ MODIFIED: Update the authState based on the user's status.
+            if user != nil {
+                self?.authState = .signedIn
+            } else {
+                self?.authState = .signedOut
+            }
         }
     }
+    
+    // ... (The rest of the file remains the same) ...
 
     func signIn(email: String, password: String, completion: @escaping (Error?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { _, error in
