@@ -58,6 +58,11 @@ struct RentalManagementApp: App {
                                 rentalManager.updateAllTenantBalances()
                             }
                         }
+                        .onChange(of: firebaseManager.authState) { _, newAuthState in
+                            if newAuthState == .signedIn {
+                                rentalManager.loadData()
+                            }
+                        }
                 }
             }
         }

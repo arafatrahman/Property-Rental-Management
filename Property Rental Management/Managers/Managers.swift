@@ -76,6 +76,17 @@ class RentalManager: ObservableObject {
         self.firebaseManager = firebaseManager
     }
 
+    func clearData() {
+        self.properties = []
+        self.tenants = []
+        self.incomes = []
+        self.expenses = []
+        self.transactionCategories = []
+        self.maintenanceRequests = []
+        self.appointments = []
+        self.reminderScheduledForTenantIDs = []
+    }
+
     func saveData() {
         if let fm = firebaseManager, fm.authState == .signedIn {
             saveDataToFirebase()
