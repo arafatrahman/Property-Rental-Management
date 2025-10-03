@@ -48,6 +48,13 @@ class FirebaseManager: ObservableObject {
             completion(nil)
         }
     }
+    
+    // Add this new function for password reset
+    func forgotPassword(email: String, completion: @escaping (Error?) -> Void) {
+        Auth.auth().sendPasswordReset(withEmail: email) { error in
+            completion(error)
+        }
+    }
 
     func signOut(rentalManager: RentalManager) {
         do {

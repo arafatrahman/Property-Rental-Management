@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AuthenticationView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
-    @EnvironmentObject var rentalManager: RentalManager // Add this line
+    @EnvironmentObject var rentalManager: RentalManager
 
     // This property will hold the function passed from the parent view.
     var onContinueAsGuest: () -> Void
@@ -37,11 +37,20 @@ struct AuthenticationView: View {
                 .autocapitalization(.none)
                 .keyboardType(.emailAddress)
 
-            SecureField("Password", text: $password)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(5.0)
-                .padding(.bottom, 20)
+            if !isSignUp { // Only show password field for Sign In
+                SecureField("Password", text: $password)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(5.0)
+                    .padding(.bottom, 20)
+            } else { // Show password field for Sign Up
+                SecureField("Password", text: $password)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(5.0)
+                    .padding(.bottom, 20)
+            }
+
 
             if let errorMessage = errorMessage {
                 Text(errorMessage)
@@ -54,10 +63,8 @@ struct AuthenticationView: View {
             }
 
             Button(action: {
-                // The button action is now in a separate function.
                 handleAuthentication()
             }) {
-                // Show a progress indicator while processing.
                 if isProcessing {
                     ProgressView()
                 } else {
@@ -70,61 +77,72 @@ struct AuthenticationView: View {
             .frame(width: 220, height: 60)
             .background(Color.blue)
             .cornerRadius(15.0)
-            // Disable the button while processing to prevent multiple taps.
             .disabled(isProcessing)
             .padding(.bottom, 10)
 
-            // Disable other buttons while processing
             Group {
                 Button(action: {
                     isSignUp.toggle()
-                    // Clear messages when toggling
-                    errorMessage = nil
-                    successMessage = nil
+                    clearMessages()
                 }) {
                     Text(isSignUp ? "Have an account? Sign In" : "Don't have an account? Sign Up")
                 }
+                .padding(.bottom, 10)
                 
-                Button(action: {
-                    // Call the function that was passed in from the parent.
-                    onContinueAsGuest()
-                }) {
+                // Add the "Forgot Password?" button
+                if !isSignUp {
+                    Button(action: handleForgotPassword) {
+                        Text("Forgot Password?")
+                    }
+                    .padding(.bottom, 20)
+                }
+                
+                Button(action: onContinueAsGuest) {
                     Text("Continue without an account")
-                }.padding(.top, 20)
+                }
+                .padding(.top, 20)
             }
             .disabled(isProcessing)
-            
         }
         .padding()
     }
 
-    // A dedicated function to handle the logic.
-    private func handleAuthentication() {
-        isProcessing = true
+    private func clearMessages() {
         errorMessage = nil
         successMessage = nil
+    }
+
+    private func handleAuthentication() {
+        isProcessing = true
+        clearMessages()
         
-        // ✅ CORRECTED LOGIC: Call the appropriate function directly.
         if isSignUp {
-            firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager) { error in
-                handleAuthResult(error: error)
-            }
+            firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager, completion: handleAuthResult)
         } else {
-            firebaseManager.signIn(email: email, password: password) { error in
-                handleAuthResult(error: error)
+            firebaseManager.signIn(email: email, password: password, completion: handleAuthResult)
+        }
+    }
+    
+    private func handleForgotPassword() {
+        isProcessing = true
+        clearMessages()
+        
+        firebaseManager.forgotPassword(email: email) { error in
+            isProcessing = false
+            if let error = error {
+                errorMessage = error.localizedDescription
+            } else {
+                successMessage = "Password reset email sent successfully. Please check your inbox."
             }
         }
     }
 
-    // ✅ ADDED: A helper function to handle the result from Firebase.
     private func handleAuthResult(error: Error?) {
         if let error = error {
             self.errorMessage = error.localizedDescription
-            self.isProcessing = false // Re-enable buttons on error
+            self.isProcessing = false
         } else {
-            // Show success message. The transition will now happen automatically.
             self.successMessage = isSignUp ? "Account created! Logging in..." : "Sign in successful! Loading..."
-            // The isProcessing flag remains true to keep the UI disabled during the view switch.
         }
     }
 }
