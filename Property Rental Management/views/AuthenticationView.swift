@@ -6,12 +6,12 @@
 //
 
 import SwiftUI
+import Combine
 
 struct AuthenticationView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
     @EnvironmentObject var rentalManager: RentalManager
 
-    // This property will hold the function passed from the parent view.
     var onContinueAsGuest: () -> Void
 
     @State private var email = ""
@@ -19,92 +19,127 @@ struct AuthenticationView: View {
     @State private var isSignUp = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
-    // A state to disable the buttons while an operation is in progress.
     @State private var isProcessing = false
 
     var body: some View {
-        VStack {
-            Text("Property Rental Management")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.bottom, 40)
+        ZStack {
+            // Animated Gradient Background
+            AnimatedBackground()
+                .edgesIgnoringSafeArea(.all)
 
-            TextField("Email", text: $email)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(5.0)
-                .padding(.bottom, 20)
-                .autocapitalization(.none)
-                .keyboardType(.emailAddress)
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 50)
 
-            if !isSignUp { // Only show password field for Sign In
-                SecureField("Password", text: $password)
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(5.0)
-                    .padding(.bottom, 20)
-            } else { // Show password field for Sign Up
-                SecureField("Password", text: $password)
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(5.0)
-                    .padding(.bottom, 20)
-            }
-
-
-            if let errorMessage = errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding()
-            } else if let successMessage = successMessage {
-                Text(successMessage)
-                    .foregroundColor(.green)
-                    .padding()
-            }
-
-            Button(action: {
-                handleAuthentication()
-            }) {
-                if isProcessing {
-                    ProgressView()
-                } else {
-                    Text(isSignUp ? "Sign Up" : "Sign In")
-                }
-            }
-            .font(.headline)
-            .foregroundColor(.white)
-            .padding()
-            .frame(width: 220, height: 60)
-            .background(Color.blue)
-            .cornerRadius(15.0)
-            .disabled(isProcessing)
-            .padding(.bottom, 10)
-
-            Group {
-                Button(action: {
-                    isSignUp.toggle()
-                    clearMessages()
-                }) {
-                    Text(isSignUp ? "Have an account? Sign In" : "Don't have an account? Sign Up")
-                }
-                .padding(.bottom, 10)
-                
-                // Add the "Forgot Password?" button
-                if !isSignUp {
-                    Button(action: handleForgotPassword) {
-                        Text("Forgot Password?")
+                    // App Icon and Title
+                    VStack {
+                        Image(systemName: "house.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.white)
+                            .shadow(radius: 10)
+                        Text("Property Manager")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .shadow(radius: 10)
                     }
+                    .padding(.bottom, 40)
+
+                    // Glassmorphic Card
+                    VStack(spacing: 20) {
+                        Text(isSignUp ? "Create Your Account" : "Welcome Back")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.8))
+
+                        CustomTextField(placeholder: "Email", text: $email, iconName: "envelope.fill")
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                        
+                        CustomTextField(placeholder: "Password", text: $password, iconName: "lock.fill", isSecure: true)
+                        
+                        if !isSignUp {
+                            Button(action: handleForgotPassword) {
+                                Text("Forgot Password?")
+                                    .font(.footnote)
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+
+                        // Primary Action Button
+                        Button(action: handleAuthentication) {
+                            if isProcessing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text(isSignUp ? "Sign Up" : "Sign In")
+                                    .fontWeight(.bold)
+                            }
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        // Updated button color to match the new theme
+                        .background(Color.teal.opacity(0.8))
+                        .cornerRadius(12)
+                        .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
+                        .disabled(isProcessing)
+                        
+                    }
+                    .padding(30)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(25)
+                    .shadow(radius: 20)
+                    .padding(.horizontal, 20)
+
+                    // Error and Success Messages
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.white)
+                            .background(Color.red.opacity(0.8))
+                            .cornerRadius(8)
+                            .padding(.horizontal)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    } else if let successMessage = successMessage {
+                        Text(successMessage)
+                            .foregroundColor(.white)
+                            .background(Color.green.opacity(0.8))
+                            .cornerRadius(8)
+                            .padding(.horizontal)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    Spacer()
+
+                    // Footer Buttons
+                    VStack(spacing: 15) {
+                        Button(action: {
+                            isSignUp.toggle()
+                            clearMessages()
+                        }) {
+                            HStack(spacing: 4) {
+                                Text(isSignUp ? "Already have an account?" : "Don't have an account?")
+                                Text(isSignUp ? "Sign In" : "Sign Up")
+                                    .fontWeight(.bold)
+                            }
+                            .font(.footnote)
+                            .foregroundColor(.white)
+                        }
+                        
+                        Button(action: onContinueAsGuest) {
+                            Text("Continue as Guest")
+                                .font(.footnote)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .disabled(isProcessing)
                     .padding(.bottom, 20)
                 }
-                
-                Button(action: onContinueAsGuest) {
-                    Text("Continue without an account")
-                }
-                .padding(.top, 20)
             }
-            .disabled(isProcessing)
         }
-        .padding()
     }
 
     private func clearMessages() {
@@ -132,7 +167,7 @@ struct AuthenticationView: View {
             if let error = error {
                 errorMessage = error.localizedDescription
             } else {
-                successMessage = "Password reset email sent successfully. Please check your inbox."
+                successMessage = "Password reset email sent. Please check your inbox."
             }
         }
     }
@@ -143,6 +178,81 @@ struct AuthenticationView: View {
             self.isProcessing = false
         } else {
             self.successMessage = isSignUp ? "Account created! Logging in..." : "Sign in successful! Loading..."
+        }
+    }
+}
+
+// Animated Background View
+struct AnimatedBackground: View {
+    @State private var start = UnitPoint(x: 0, y: -2)
+    @State private var end = UnitPoint(x: 4, y: 0)
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .default).autoconnect()
+    
+    // New, more professional color palette
+    let colors = [
+        Color(red: 0.1, green: 0.3, blue: 0.5), // Deep Blue
+        Color.cyan,
+        Color.teal,
+        Color(red: 0.2, green: 0.5, blue: 0.4)  // Dark Green
+    ]
+
+    var body: some View {
+        LinearGradient(gradient: Gradient(colors: colors), startPoint: start, endPoint: end)
+            .animation(Animation.easeInOut(duration: 6).repeatForever(), value: start)
+            .onReceive(timer) { _ in
+                self.start = UnitPoint(x: 4, y: 0)
+                self.end = UnitPoint(x: 0, y: 2)
+                self.start = UnitPoint(x: -4, y: 20)
+                self.start = UnitPoint(x: 4, y: 0)
+            }
+    }
+}
+
+// Custom Text Field View
+struct CustomTextField: View {
+    var placeholder: String
+    @Binding var text: String
+    var iconName: String
+    var isSecure: Bool = false
+
+    var body: some View {
+        HStack {
+            Image(systemName: iconName)
+                .foregroundColor(.white.opacity(0.7))
+            if isSecure {
+                SecureField("", text: $text)
+                    .placeholder(when: text.isEmpty) {
+                        Text(placeholder).foregroundColor(.white.opacity(0.5))
+                    }
+            } else {
+                TextField("", text: $text)
+                    .placeholder(when: text.isEmpty) {
+                        Text(placeholder).foregroundColor(.white.opacity(0.5))
+                    }
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.2))
+        .cornerRadius(12)
+        .foregroundColor(.white)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// Helper for placeholder color
+extension View {
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder placeholder: () -> Content) -> some View {
+
+        ZStack(alignment: alignment) {
+            placeholder().opacity(shouldShow ? 1 : 0)
+            self
         }
     }
 }
