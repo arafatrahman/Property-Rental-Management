@@ -43,6 +43,7 @@ struct RentalManagementApp: App {
                     // Once Firebase confirms the user is signed out, show the login view.
                     AuthenticationView(onContinueAsGuest: setGuestMode)
                         .environmentObject(firebaseManager)
+                        .environmentObject(rentalManager)
                 case .signedIn:
                     // Once Firebase confirms the user is signed in, show the main app.
                     MainTabView()

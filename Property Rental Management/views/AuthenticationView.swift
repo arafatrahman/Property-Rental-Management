@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AuthenticationView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
+    @EnvironmentObject var rentalManager: RentalManager // Add this line
 
     // This property will hold the function passed from the parent view.
     var onContinueAsGuest: () -> Void
@@ -105,7 +106,7 @@ struct AuthenticationView: View {
         
         // ✅ CORRECTED LOGIC: Call the appropriate function directly.
         if isSignUp {
-            firebaseManager.signUp(email: email, password: password) { error in
+            firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager) { error in
                 handleAuthResult(error: error)
             }
         } else {

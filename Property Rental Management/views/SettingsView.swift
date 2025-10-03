@@ -50,8 +50,7 @@ struct SettingsView: View {
                 if firebaseManager.authState == .signedIn {
                     Text("Signed in as \(Auth.auth().currentUser?.email ?? "...")")
                     Button("Sign Out", role: .destructive) {
-                        manager.clearData()
-                        firebaseManager.signOut()
+                        firebaseManager.signOut(rentalManager: manager)
                         // This will cause the login screen to reappear on next launch
                         hasChosenGuestMode = false
                     }

@@ -95,7 +95,7 @@ class RentalManager: ObservableObject {
         }
     }
     
-    private func appData() -> AppData {
+    func appData() -> AppData {
         return AppData(
             properties: self.properties,
             tenants: self.tenants,

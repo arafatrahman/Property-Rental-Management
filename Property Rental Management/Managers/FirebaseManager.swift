@@ -11,19 +11,18 @@ import FirebaseFirestore
 import FirebaseAuth
 import Combine
 
-// ✅ ADDED: An enum to represent the different authentication states.
+// An enum to represent the different authentication states.
 enum AuthState {
     case unknown, signedIn, signedOut
 }
 
 class FirebaseManager: ObservableObject {
-    // ✅ MODIFIED: Changed the simple boolean to use the new AuthState enum.
     @Published var authState: AuthState = .unknown
     private var db = Firestore.firestore()
 
     init() {
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            // ✅ MODIFIED: Update the authState based on the user's status.
+            // Update the authState based on the user's status.
             if user != nil {
                 self?.authState = .signedIn
             } else {
@@ -31,8 +30,6 @@ class FirebaseManager: ObservableObject {
             }
         }
     }
-    
-    // ... (The rest of the file remains the same) ...
 
     func signIn(email: String, password: String, completion: @escaping (Error?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { _, error in
@@ -40,15 +37,23 @@ class FirebaseManager: ObservableObject {
         }
     }
 
-    func signUp(email: String, password: String, completion: @escaping (Error?) -> Void) {
-        Auth.auth().createUser(withEmail: email, password: password) { _, error in
-            completion(error)
+    func signUp(email: String, password: String, rentalManager: RentalManager, completion: @escaping (Error?) -> Void) {
+        Auth.auth().createUser(withEmail: email, password: password) { [weak self] authResult, error in
+            if let error = error {
+                completion(error)
+                return
+            }
+            // After a successful sign-up, save the local data to Firebase.
+            self?.saveData(appData: rentalManager.appData())
+            completion(nil)
         }
     }
 
-    func signOut() {
+    func signOut(rentalManager: RentalManager) {
         do {
             try Auth.auth().signOut()
+            rentalManager.clearData()
+            rentalManager.loadData() // This will now load the local data
         } catch {
             print("Error signing out: \(error.localizedDescription)")
         }
