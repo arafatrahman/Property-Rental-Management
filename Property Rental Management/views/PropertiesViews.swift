@@ -10,11 +10,23 @@ import PhotosUI
 struct PropertiesView: View {
     @EnvironmentObject var manager: RentalManager
     @State private var showingAddEditProperty = false
+    @State private var searchText = ""
+
+    var filteredProperties: [Property] {
+        if searchText.isEmpty {
+            return manager.properties
+        } else {
+            return manager.properties.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                $0.address.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
     
     var body: some View {
         NavigationView {
             List {
-                ForEach(manager.properties) { property in
+                ForEach(filteredProperties) { property in
                     NavigationLink(destination: PropertyDetailView(property: property)) {
                         PropertyRowView(property: property)
                     }
@@ -23,6 +35,7 @@ struct PropertiesView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Properties")
+            .searchable(text: $searchText, prompt: "Search by name or address")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddEditProperty.toggle() }) {
@@ -36,6 +49,8 @@ struct PropertiesView: View {
         }
     }
 }
+
+// The rest of the file remains the same...
 
 struct PropertyRowView: View {
     @EnvironmentObject var settings: SettingsManager

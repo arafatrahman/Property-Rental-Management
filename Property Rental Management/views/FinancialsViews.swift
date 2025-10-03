@@ -31,6 +31,8 @@ struct FinancialsView: View {
     @State private var incomeToEdit: Income?
     @State private var expenseToEdit: Expense?
     
+    @State private var searchText = ""
+
     init(initialFilter: FinancialFilter = .all) {
         _filter = State(initialValue: initialFilter)
     }
@@ -56,32 +58,48 @@ struct FinancialsView: View {
     }
     
     private var filteredIncomes: [Income] {
+        var dateFilteredIncomes: [Income]
         let sortedIncomes = manager.incomes.sorted { $0.date > $1.date }
+
         switch filterType {
         case .daily:
-            return sortedIncomes.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+            dateFilteredIncomes = sortedIncomes.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
         case .monthly:
-            return sortedIncomes.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .month) }
+            dateFilteredIncomes = sortedIncomes.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .month) }
         case .yearly:
-            return sortedIncomes.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .year) }
+            dateFilteredIncomes = sortedIncomes.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .year) }
         case .custom:
             let range = startDate.startOfDay...endDate.endOfDay
-            return sortedIncomes.filter { range.contains($0.date) }
+            dateFilteredIncomes = sortedIncomes.filter { range.contains($0.date) }
+        }
+
+        if searchText.isEmpty {
+            return dateFilteredIncomes
+        } else {
+            return dateFilteredIncomes.filter { $0.description.localizedCaseInsensitiveContains(searchText) }
         }
     }
     
     private var filteredExpenses: [Expense] {
+        var dateFilteredExpenses: [Expense]
         let sortedExpenses = manager.expenses.sorted { $0.date > $1.date }
+
         switch filterType {
         case .daily:
-            return sortedExpenses.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+            dateFilteredExpenses = sortedExpenses.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
         case .monthly:
-            return sortedExpenses.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .month) }
+            dateFilteredExpenses = sortedExpenses.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .month) }
         case .yearly:
-            return sortedExpenses.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .year) }
+            dateFilteredExpenses = sortedExpenses.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: .year) }
         case .custom:
             let range = startDate.startOfDay...endDate.endOfDay
-            return sortedExpenses.filter { range.contains($0.date) }
+            dateFilteredExpenses = sortedExpenses.filter { range.contains($0.date) }
+        }
+
+        if searchText.isEmpty {
+            return dateFilteredExpenses
+        } else {
+            return dateFilteredExpenses.filter { $0.description.localizedCaseInsensitiveContains(searchText) }
         }
     }
     
@@ -210,6 +228,7 @@ struct FinancialsView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Financials")
+            .searchable(text: $searchText, prompt: "Search by description")
             .toolbar {
                 Menu {
                     Button { showingAddIncome = true } label: { Label("Add Income", systemImage: "plus.circle.fill") }
@@ -225,6 +244,8 @@ struct FinancialsView: View {
         }
     }
 }
+
+// The rest of the file remains the same...
 
 struct AddIncomeView: View {
     @Environment(\.dismiss) var dismiss

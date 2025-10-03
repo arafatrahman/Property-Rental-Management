@@ -11,9 +11,19 @@ struct TenantsView: View {
     @EnvironmentObject var manager: RentalManager
     @State private var showingAddEditTenant = false
     @State private var selectedStatus: TenantStatus = .active
+    @State private var searchText = ""
     
     private var filteredTenants: [Tenant] {
-        manager.tenants.filter { $0.status == selectedStatus }
+        let tenantsByStatus = manager.tenants.filter { $0.status == selectedStatus }
+        
+        if searchText.isEmpty {
+            return tenantsByStatus
+        } else {
+            return tenantsByStatus.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                $0.email.localizedCaseInsensitiveContains(searchText)
+            }
+        }
     }
 
     var body: some View {
@@ -40,6 +50,7 @@ struct TenantsView: View {
                 .listStyle(.insetGrouped)
             }
             .navigationTitle("Tenants")
+            .searchable(text: $searchText, prompt: "Search by name or email")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddEditTenant.toggle() }) {
@@ -53,6 +64,8 @@ struct TenantsView: View {
         }
     }
 }
+
+// The rest of the file remains the same...
 
 struct TenantRowView: View {
     @EnvironmentObject var manager: RentalManager
