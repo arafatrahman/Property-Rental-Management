@@ -2,10 +2,11 @@
 //  Property_Rental_ManagementTests.swift
 //  Property Rental ManagementTests
 //
-//  Created by Md Arafat Rahman on 23/09/2025.
+//  Created by Md Arafat Rahman on 08/10/2025.
 //
 
 import Testing
+@testable import Property_Rental_Management
 
 struct Property_Rental_ManagementTests {
 
