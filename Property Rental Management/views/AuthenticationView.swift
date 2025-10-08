@@ -32,17 +32,21 @@ struct AuthenticationView: View {
                     Spacer(minLength: 50)
 
                     // App Icon and Title
-                    VStack {
-                        Image(systemName: "house.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.white)
+                    VStack(alignment: .center, spacing: 10) {
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 80, height: 80)
                             .shadow(radius: 10)
-                        Text("Property Manager")
+
+                        Text("Property Rental Management")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                             .shadow(radius: 10)
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 40)
 
                     // Glassmorphic Card
