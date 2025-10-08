@@ -28,44 +28,15 @@ struct RentalManagementApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // ✅ MODIFIED: The entire view logic is updated to prevent flickering.
-            if hasChosenGuestMode {
-                MainTabView()
-                    .environmentObject(rentalManager)
-                    .environmentObject(settingsManager)
-                    .environmentObject(firebaseManager)
-            } else {
-                switch firebaseManager.authState {
-                case .unknown:
-                    // Show a loading view while Firebase checks the auth state.
-                    ProgressView()
-                case .signedOut:
-                    // Once Firebase confirms the user is signed out, show the login view.
-                    AuthenticationView(onContinueAsGuest: setGuestMode)
-                        .environmentObject(firebaseManager)
-                        .environmentObject(rentalManager)
-                case .signedIn:
-                    // Once Firebase confirms the user is signed in, show the main app.
-                    MainTabView()
-                        .environmentObject(rentalManager)
-                        .environmentObject(settingsManager)
-                        .environmentObject(firebaseManager)
-                        .onAppear {
-                            NotificationManager.instance.requestAuthorization()
-                            rentalManager.loadData()
-                        }
-                        .onChange(of: scenePhase) { _, newPhase in
-                            if newPhase == .active {
-                                rentalManager.updateAllTenantBalances()
-                            }
-                        }
-                        .onChange(of: firebaseManager.authState) { _, newAuthState in
-                            if newAuthState == .signedIn {
-                                rentalManager.loadData()
-                            }
-                        }
+            SplashScreenView()
+                .environmentObject(rentalManager)
+                .environmentObject(settingsManager)
+                .environmentObject(firebaseManager)
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        rentalManager.updateAllTenantBalances()
+                    }
                 }
-            }
         }
     }
     
