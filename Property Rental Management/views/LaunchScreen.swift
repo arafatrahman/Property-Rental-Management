@@ -19,6 +19,9 @@ struct LaunchScreen: View {
                 .environmentObject(rentalManager)
                 .environmentObject(settingsManager)
                 .environmentObject(firebaseManager)
+                .onAppear {
+                    rentalManager.loadData()
+                }
         } else {
             switch firebaseManager.authState {
             case .unknown:

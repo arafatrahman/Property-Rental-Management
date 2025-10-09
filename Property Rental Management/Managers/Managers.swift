@@ -34,6 +34,8 @@ class RentalManager: ObservableObject {
     @Published var maintenanceRequests: [MaintenanceRequest] = []
     @Published var appointments: [Appointment] = []
     @Published var reminderScheduledForTenantIDs: Set<UUID> = []
+    @Published var lastLoggedIncome: Income?
+    @Published var isLoading = true
     
     private var firebaseManager: FirebaseManager?
 
@@ -66,8 +68,9 @@ class RentalManager: ObservableObject {
     // A default initializer for previews and local-only mode
     init() {
         self.firebaseManager = nil
-        loadData()
-        updateAllTenantBalances()
+        if transactionCategories.isEmpty {
+            loadDefaultCategories()
+        }
     }
     
     // A specific initializer for when the app is running with Firebase
@@ -85,9 +88,15 @@ class RentalManager: ObservableObject {
         self.maintenanceRequests = []
         self.appointments = []
         self.reminderScheduledForTenantIDs = []
+        if transactionCategories.isEmpty { loadDefaultCategories() }
     }
 
     func saveData() {
+        if isLoading {
+            print("Save cancelled: Initial data load is not complete.")
+            return
+        }
+        
         if let fm = firebaseManager, fm.authState == .signedIn {
             saveDataToFirebase()
         } else {
@@ -122,6 +131,7 @@ class RentalManager: ObservableObject {
     }
 
     func loadData() {
+        isLoading = true
         if let fm = firebaseManager, fm.authState == .signedIn {
             loadDataFromFirebase()
         } else {
@@ -132,6 +142,7 @@ class RentalManager: ObservableObject {
     private func loadDataLocally() {
         guard FileManager.default.fileExists(atPath: dataFileURL.path) else {
             if transactionCategories.isEmpty { loadDefaultCategories() }
+            isLoading = false
             return
         }
         
@@ -156,24 +167,29 @@ class RentalManager: ObservableObject {
             print("Error loading data: \(error.localizedDescription)")
             if transactionCategories.isEmpty { loadDefaultCategories() }
         }
+        updateAllTenantBalances()
+        isLoading = false
     }
     
     private func loadDataFromFirebase() {
         firebaseManager?.loadData { [weak self] appData in
+            guard let self = self else { return }
             if let appData = appData {
-                self?.properties = appData.properties
-                self?.tenants = appData.tenants
-                self?.incomes = appData.incomes
-                self?.expenses = appData.expenses
-                self?.transactionCategories = appData.transactionCategories
-                self?.maintenanceRequests = appData.maintenanceRequests
-                self?.appointments = appData.appointments
+                self.properties = appData.properties
+                self.tenants = appData.tenants
+                self.incomes = appData.incomes
+                self.expenses = appData.expenses
+                self.transactionCategories = appData.transactionCategories
+                self.maintenanceRequests = appData.maintenanceRequests
+                self.appointments = appData.appointments
                 print("Data loaded from Firebase.")
             } else {
-                if self?.transactionCategories.isEmpty ?? true {
-                    self?.loadDefaultCategories()
+                if self.transactionCategories.isEmpty {
+                    self.loadDefaultCategories()
                 }
             }
+            self.updateAllTenantBalances()
+            self.isLoading = false
         }
     }
     
@@ -391,6 +407,8 @@ class RentalManager: ObservableObject {
         if let tenantId = income.tenantId {
             recalculateBalance(forTenantId: tenantId)
         }
+
+        lastLoggedIncome = income
         saveData()
     }
 
