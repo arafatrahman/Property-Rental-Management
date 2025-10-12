@@ -41,6 +41,7 @@ struct SettingsView: View {
     @State private var showingExporter = false
     @State private var showingImporter = false
     @State private var showingImportAlert = false
+    @State private var showingDeleteAlert = false
     @State private var importedData: Data?
 
     var body: some View {
@@ -53,6 +54,9 @@ struct SettingsView: View {
                         firebaseManager.signOut(rentalManager: manager)
                         // This will cause the login screen to reappear on next launch
                         hasChosenGuestMode = false
+                    }
+                    Button("Delete Account", role: .destructive) {
+                        showingDeleteAlert = true
                     }
                 } else {
                     Button("Sign In / Sign Up") {
@@ -122,6 +126,20 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will overwrite all existing data in the app. This action cannot be undone.")
+        }
+        .alert("Delete Account?", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                firebaseManager.deleteAccount { error in
+                    if let error = error {
+                        print("Error deleting account: \(error.localizedDescription)")
+                    } else {
+                        hasChosenGuestMode = false
+                    }
+                }
+            }
+        } message: {
+            Text("Are you sure you want to permanently delete your account and all associated data? This action cannot be undone.")
         }
     }
 }

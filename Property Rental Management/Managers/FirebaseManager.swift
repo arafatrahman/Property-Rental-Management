@@ -95,4 +95,29 @@ class FirebaseManager: ObservableObject {
             }
         }
     }
+    
+    func deleteAccount(completion: @escaping (Error?) -> Void) {
+        guard let user = Auth.auth().currentUser else {
+            completion(nil)
+            return
+        }
+        
+        // 1. Delete user data from Firestore
+        db.collection("users").document(user.uid).delete { [weak self] error in
+            if let error = error {
+                completion(error)
+                return
+            }
+            
+            // 2. Delete user authentication record
+            user.delete { error in
+                if let error = error {
+                    completion(error)
+                } else {
+                    self?.authState = .signedOut
+                    completion(nil)
+                }
+            }
+        }
+    }
 }
