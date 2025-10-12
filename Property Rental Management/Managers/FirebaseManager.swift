@@ -33,14 +33,16 @@ class FirebaseManager: ObservableObject {
 
     func signIn(email: String, password: String, rentalManager: RentalManager, completion: @escaping (Error?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { _, error in
-            if error == nil {
-                // On successful sign-in, clear any existing data before loading the new data.
-                DispatchQueue.main.async {
-                    rentalManager.clearData()
-                    rentalManager.loadData()
-                }
+            if let error = error {
+                completion(error)
+                return
             }
-            completion(error)
+            // On successful sign-in, clear any existing data before loading the new data.
+            DispatchQueue.main.async {
+                rentalManager.clearData()
+                rentalManager.loadData()
+                completion(nil)
+            }
         }
     }
 
@@ -50,9 +52,12 @@ class FirebaseManager: ObservableObject {
                 completion(error)
                 return
             }
-            // After a successful sign-up, save the local data to Firebase.
-            self?.saveData(appData: rentalManager.appData())
-            completion(nil)
+            // After a successful sign-up, clear existing data and save the local data to Firebase.
+            DispatchQueue.main.async {
+                rentalManager.clearData()
+                self?.saveData(appData: rentalManager.appData())
+                completion(nil)
+            }
         }
     }
     
@@ -66,8 +71,10 @@ class FirebaseManager: ObservableObject {
     func signOut(rentalManager: RentalManager) {
         do {
             try Auth.auth().signOut()
-            rentalManager.clearData()
-            rentalManager.loadData() // This will now load the local data
+            DispatchQueue.main.async {
+                rentalManager.clearData()
+                rentalManager.loadData() // This will now load the local data
+            }
         } catch {
             print("Error signing out: \(error.localizedDescription)")
         }
