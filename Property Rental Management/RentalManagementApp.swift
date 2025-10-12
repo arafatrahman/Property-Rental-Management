@@ -40,6 +40,12 @@ struct RentalManagementApp: App {
                         rentalManager.updateAllTenantBalances()
                     }
                 }
+                .onChange(of: firebaseManager.authState) { _, newAuthState in
+                    // This is the key: Only load data if the user is signed in AND we are not in the middle of a guest data migration.
+                    if newAuthState == .signedIn && !firebaseManager.isMigratingGuestData {
+                        rentalManager.loadData()
+                    }
+                }
         }
     }
     

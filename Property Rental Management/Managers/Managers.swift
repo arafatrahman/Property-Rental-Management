@@ -202,8 +202,11 @@ class RentalManager: ObservableObject {
     }
     
     private func saveDataToFirebase() {
-        firebaseManager?.saveData(appData: appData())
-        print("Data saved to Firebase.")
+        firebaseManager?.saveData(appData: appData()) { error in
+            if let error = error {
+                print("Error saving data to Firebase: \(error.localizedDescription)")
+            }
+        }
     }
 
     func exportData() -> Data? {

@@ -14,36 +14,40 @@ struct LaunchScreen: View {
     @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
 
     var body: some View {
-        if hasChosenGuestMode {
-            MainTabView()
-                .environmentObject(rentalManager)
-                .environmentObject(settingsManager)
-                .environmentObject(firebaseManager)
-                .onAppear {
-                    rentalManager.loadData()
-                }
-        } else {
-            switch firebaseManager.authState {
-            case .unknown:
-                ProgressView()
-            case .signedOut:
-                AuthenticationView(onContinueAsGuest: setGuestMode)
-                    .environmentObject(firebaseManager)
-                    .environmentObject(rentalManager)
-            case .signedIn:
+        Group {
+            if hasChosenGuestMode {
                 MainTabView()
                     .environmentObject(rentalManager)
                     .environmentObject(settingsManager)
                     .environmentObject(firebaseManager)
                     .onAppear {
-                        NotificationManager.instance.requestAuthorization()
                         rentalManager.loadData()
                     }
-                    .onChange(of: firebaseManager.authState) { _, newAuthState in
-                        if newAuthState == .signedIn {
-                            rentalManager.loadData()
-                        }
+            } else {
+                switch firebaseManager.authState {
+                case .unknown:
+                    ProgressView()
+                case .signedOut:
+                    AuthenticationView(onContinueAsGuest: setGuestMode)
+                        .environmentObject(firebaseManager)
+                        .environmentObject(rentalManager)
+                case .signedIn:
+                    // Show a progress view if we are migrating, otherwise show the main tab view.
+                    if firebaseManager.isMigratingGuestData {
+                        ProgressView("Migrating your data...")
+                    } else {
+                        MainTabView()
+                            .environmentObject(rentalManager)
+                            .environmentObject(settingsManager)
+                            .environmentObject(firebaseManager)
                     }
+                }
+            }
+        }
+        .onAppear {
+             // This ensures that if the app is launched while already signed in (and not migrating), data is loaded.
+            if firebaseManager.authState == .signedIn && !firebaseManager.isMigratingGuestData {
+                rentalManager.loadData()
             }
         }
     }
