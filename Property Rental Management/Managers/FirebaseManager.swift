@@ -31,8 +31,15 @@ class FirebaseManager: ObservableObject {
         }
     }
 
-    func signIn(email: String, password: String, completion: @escaping (Error?) -> Void) {
+    func signIn(email: String, password: String, rentalManager: RentalManager, completion: @escaping (Error?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { _, error in
+            if error == nil {
+                // On successful sign-in, clear any existing data before loading the new data.
+                DispatchQueue.main.async {
+                    rentalManager.clearData()
+                    rentalManager.loadData()
+                }
+            }
             completion(error)
         }
     }
@@ -96,7 +103,7 @@ class FirebaseManager: ObservableObject {
         }
     }
     
-    func deleteAccount(completion: @escaping (Error?) -> Void) {
+    func deleteAccount(rentalManager: RentalManager, completion: @escaping (Error?) -> Void) {
         guard let user = Auth.auth().currentUser else {
             completion(nil)
             return
@@ -115,6 +122,8 @@ class FirebaseManager: ObservableObject {
                     completion(error)
                 } else {
                     self?.authState = .signedOut
+                    rentalManager.clearData()
+                    rentalManager.loadData()
                     completion(nil)
                 }
             }

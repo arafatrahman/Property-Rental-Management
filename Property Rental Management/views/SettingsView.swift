@@ -35,6 +35,7 @@ struct SettingsView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var manager: RentalManager
     @EnvironmentObject var firebaseManager: FirebaseManager
+    @EnvironmentObject var themeManager: ThemeManager
     
     @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
     
@@ -64,6 +65,10 @@ struct SettingsView: View {
                         hasChosenGuestMode = false
                     }
                 }
+            }
+            
+            Section("Appearance") {
+                Toggle("Dark Mode", isOn: $themeManager.isDarkMode)
             }
             
             Section("Currency") {
@@ -130,7 +135,7 @@ struct SettingsView: View {
         .alert("Delete Account?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
-                firebaseManager.deleteAccount { error in
+                firebaseManager.deleteAccount(rentalManager: manager) { error in
                     if let error = error {
                         print("Error deleting account: \(error.localizedDescription)")
                     } else {

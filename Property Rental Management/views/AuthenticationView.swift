@@ -158,7 +158,7 @@ struct AuthenticationView: View {
         if isSignUp {
             firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager, completion: handleAuthResult)
         } else {
-            firebaseManager.signIn(email: email, password: password, completion: handleAuthResult)
+            firebaseManager.signIn(email: email, password: password, rentalManager: rentalManager, completion: handleAuthResult)
         }
     }
     

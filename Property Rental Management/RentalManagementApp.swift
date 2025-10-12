@@ -14,6 +14,7 @@ struct RentalManagementApp: App {
     @StateObject private var rentalManager: RentalManager
     
     @StateObject private var settingsManager = SettingsManager()
+    @StateObject private var themeManager = ThemeManager()
     @Environment(\.scenePhase) var scenePhase
     
     @AppStorage("hasChosenGuestMode") private var hasChosenGuestMode: Bool = false
@@ -32,6 +33,8 @@ struct RentalManagementApp: App {
                 .environmentObject(rentalManager)
                 .environmentObject(settingsManager)
                 .environmentObject(firebaseManager)
+                .environmentObject(themeManager)
+                .preferredColorScheme(themeManager.preferredColorScheme)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
                         rentalManager.updateAllTenantBalances()

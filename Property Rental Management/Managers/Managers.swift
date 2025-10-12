@@ -10,6 +10,14 @@ import UserNotifications
 import SwiftUI
 import Firebase
 
+class ThemeManager: ObservableObject {
+    @AppStorage("isDarkMode") var isDarkMode: Bool = true
+
+    var preferredColorScheme: SwiftUI.ColorScheme? {
+        return isDarkMode ? .dark : .light
+    }
+}
+
 class SettingsManager: ObservableObject {
     @AppStorage("currencySymbol") var currencySymbolRaw: String = CurrencySymbol.usd.rawValue
 
