@@ -74,7 +74,9 @@ struct ScheduleView: View {
                                     HStack {
                                         VStack(alignment: .leading) {
                                             Text(appointment.title).font(.headline)
-                                            Text(appointment.property.name).font(.subheadline).foregroundColor(.secondary)
+                                            if let property = manager.getProperty(byId: appointment.propertyId) {
+                                                Text(property.name).font(.subheadline).foregroundColor(.secondary)
+                                            }
                                         }
                                         Spacer()
                                         Text(appointment.status.rawValue)
@@ -122,7 +124,9 @@ struct ScheduleView: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     Text(appointment.title).font(.headline)
-                                    Text(appointment.property.name).font(.subheadline).foregroundColor(.secondary)
+                                    if let property = manager.getProperty(byId: appointment.propertyId) {
+                                        Text(property.name).font(.subheadline).foregroundColor(.secondary)
+                                    }
                                     Text("\(appointment.date.formatted(date: .abbreviated, time: .shortened))")
                                 }
                                 Spacer()
@@ -196,8 +200,8 @@ struct AddAppointmentView: View {
     }
 
     private func save() {
-        guard let propertyId = selectedPropertyId, let property = manager.getProperty(byId: propertyId) else { return }
-        let appointment = Appointment(property: property, title: title, date: date)
+        guard let propertyId = selectedPropertyId else { return }
+        let appointment = Appointment(propertyId: propertyId, title: title, date: date)
         manager.addAppointment(appointment)
         dismiss()
     }
@@ -208,18 +212,16 @@ struct EditAppointmentView: View {
     @EnvironmentObject var manager: RentalManager
     
     @State private var appointment: Appointment
-    @State private var selectedPropertyId: UUID
     
     init(appointment: Appointment) {
         _appointment = State(initialValue: appointment)
-        _selectedPropertyId = State(initialValue: appointment.property.id)
     }
 
     var body: some View {
         NavigationView {
             Form {
                 Section("Appointment Details") {
-                    Picker("Property", selection: $selectedPropertyId) {
+                    Picker("Property", selection: $appointment.propertyId) {
                         ForEach(manager.properties) { Text($0.name).tag($0.id) }
                     }
                     TextField("Title (e.g., Viewing)", text: $appointment.title)
@@ -239,11 +241,6 @@ struct EditAppointmentView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save) }
-            }
-            .onChange(of: selectedPropertyId) { _, newId in
-                if let property = manager.getProperty(byId: newId) {
-                    appointment.property = property
-                }
             }
         }
     }

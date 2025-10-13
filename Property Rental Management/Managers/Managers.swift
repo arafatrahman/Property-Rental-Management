@@ -219,23 +219,44 @@ class RentalManager: ObservableObject {
         }
     }
 
-    func importData(from data: Data) {
+    func importData(from data: Data, completion: @escaping (Error?) -> Void) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
             let appData = try decoder.decode(AppData.self, from: data)
-            self.properties = appData.properties
-            self.tenants = appData.tenants
-            self.incomes = appData.incomes
-            self.expenses = appData.expenses
-            self.transactionCategories = appData.transactionCategories
-            self.maintenanceRequests = appData.maintenanceRequests
-            self.appointments = appData.appointments
-            
-            saveData()
-            
+
+            let updateLocalState = {
+                self.properties = appData.properties
+                self.tenants = appData.tenants
+                self.incomes = appData.incomes
+                self.expenses = appData.expenses
+                self.transactionCategories = appData.transactionCategories
+                self.maintenanceRequests = appData.maintenanceRequests
+                self.appointments = appData.appointments
+            }
+
+            if let fm = firebaseManager, fm.authState == .signedIn {
+                // If logged in, save to Firebase first.
+                fm.saveData(appData: appData) { [weak self] error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(error)
+                            return
+                        }
+                        // On success, update local state and save a local copy too.
+                        updateLocalState()
+                        self?.saveDataLocally()
+                        completion(nil)
+                    }
+                }
+            } else {
+                // If not logged in, just update local state and save locally.
+                updateLocalState()
+                saveDataLocally()
+                completion(nil)
+            }
         } catch {
-            print("Error importing data: \(error.localizedDescription)")
+            completion(error)
         }
     }
     
@@ -529,7 +550,9 @@ class RentalManager: ObservableObject {
         appointments.sort(by: { $0.date < $1.date })
         
         if enableAppointmentReminders {
-            NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+            if let property = getProperty(byId: appointment.propertyId) {
+                NotificationManager.instance.scheduleAppointmentReminder(for: appointment, propertyName: property.name)
+            }
         }
         saveData()
     }
@@ -542,7 +565,9 @@ class RentalManager: ObservableObject {
         NotificationManager.instance.cancelAppointmentReminder(for: appointment.id)
         
         if enableAppointmentReminders {
-            NotificationManager.instance.scheduleAppointmentReminder(for: appointment)
+            if let property = getProperty(byId: appointment.propertyId) {
+                NotificationManager.instance.scheduleAppointmentReminder(for: appointment, propertyName: property.name)
+            }
         }
         saveData()
     }
@@ -630,11 +655,11 @@ class NotificationManager {
         UNUserNotificationCenter.current().add(request)
     }
     
-    func scheduleAppointmentReminder(for appointment: Appointment) {
+    func scheduleAppointmentReminder(for appointment: Appointment, propertyName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Appointment Reminder"
         content.subtitle = appointment.title
-        content.body = "You have an appointment for \(appointment.property.name) in 1 hour."
+        content.body = "You have an appointment for \(propertyName) in 1 hour."
         content.sound = .default
 
         let triggerDate = appointment.date.addingTimeInterval(-3600)

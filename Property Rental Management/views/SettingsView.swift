@@ -45,15 +45,17 @@ struct SettingsView: View {
     @State private var showingDeleteAlert = false
     @State private var importedData: Data?
 
+    // New state for showing the import result
+    @State private var showingImportResultAlert = false
+    @State private var importResultMessage = ""
+
     var body: some View {
         Form {
             Section("Account") {
-                // ✅ CORRECTED: This now checks the `authState` enum instead of the old boolean.
                 if firebaseManager.authState == .signedIn {
                     Text("Signed in as \(Auth.auth().currentUser?.email ?? "...")")
                     Button("Sign Out", role: .destructive) {
                         firebaseManager.signOut(rentalManager: manager)
-                        // This will cause the login screen to reappear on next launch
                         hasChosenGuestMode = false
                     }
                     Button("Delete Account", role: .destructive) {
@@ -61,7 +63,6 @@ struct SettingsView: View {
                     }
                 } else {
                     Button("Sign In / Sign Up") {
-                        // Setting this to false will trigger the login view to appear
                         hasChosenGuestMode = false
                     }
                 }
@@ -125,12 +126,24 @@ struct SettingsView: View {
             }
             Button("Import", role: .destructive) {
                 if let data = importedData {
-                    manager.importData(from: data)
+                    manager.importData(from: data) { error in
+                        if let error = error {
+                            importResultMessage = "Import failed: \(error.localizedDescription)"
+                        } else {
+                            importResultMessage = "Data imported successfully."
+                        }
+                        showingImportResultAlert = true
+                    }
                 }
                 importedData = nil
             }
         } message: {
             Text("This will overwrite all existing data in the app. This action cannot be undone.")
+        }
+        .alert("Import Result", isPresented: $showingImportResultAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(importResultMessage)
         }
         .alert("Delete Account?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}

@@ -149,7 +149,7 @@ struct MaintenanceRequest: Identifiable, Codable, Hashable {
 
 struct Appointment: Identifiable, Codable, Hashable {
     var id = UUID()
-    var property: Property
+    var propertyId: UUID
     var title: String
     var date: Date
     var status: AppointmentStatus = .scheduled
