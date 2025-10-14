@@ -62,10 +62,11 @@ struct TenantsView: View {
                 AddEditTenantView(tenant: nil)
             }
         }
+        .navigationViewStyle(.stack)
     }
 }
 
-// The rest of the file remains the same...
+
 
 struct TenantRowView: View {
     @EnvironmentObject var manager: RentalManager

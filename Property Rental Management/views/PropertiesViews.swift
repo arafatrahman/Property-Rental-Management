@@ -7,6 +7,7 @@
 import SwiftUI
 import PhotosUI
 
+
 struct PropertiesView: View {
     @EnvironmentObject var manager: RentalManager
     @State private var showingAddEditProperty = false
@@ -47,10 +48,9 @@ struct PropertiesView: View {
                 AddEditPropertyView(property: nil)
             }
         }
+        .navigationViewStyle(.stack)
     }
 }
-
-// The rest of the file remains the same...
 
 struct PropertyRowView: View {
     @EnvironmentObject var settings: SettingsManager

@@ -242,10 +242,11 @@ struct FinancialsView: View {
             .sheet(item: $incomeToEdit) { income in EditIncomeView(income: income) }
             .sheet(item: $expenseToEdit) { expense in EditExpenseView(expense: expense) }
         }
+        .navigationViewStyle(.stack)
     }
 }
 
-// The rest of the file remains the same...
+
 
 struct AddIncomeView: View {
     @Environment(\.dismiss) var dismiss
