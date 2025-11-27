@@ -7,6 +7,8 @@
 
 import SwiftUI
 import Combine
+import GoogleSignIn // <-- Import
+import GoogleSignInSwift // <-- Import
 
 struct AuthenticationView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
@@ -59,37 +61,56 @@ struct AuthenticationView: View {
                         CustomTextField(placeholder: "Email", text: $email, iconName: "envelope.fill")
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
-                        
+                            .textContentType(.emailAddress) // Added for autofill
+
                         CustomTextField(placeholder: "Password", text: $password, iconName: "lock.fill", isSecure: true)
-                        
+                             .textContentType(isSignUp ? .newPassword : .password) // Added for autofill
+
                         if !isSignUp {
                             Button(action: handleForgotPassword) {
                                 Text("Forgot Password?")
                                     .font(.footnote)
                                     .foregroundColor(.white.opacity(0.7))
                             }
+                            .frame(maxWidth: .infinity, alignment: .trailing) // Align right
                         }
 
-                        // Primary Action Button
+                        // Primary Action Button (Email/Password)
                         Button(action: handleAuthentication) {
-                            if isProcessing {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
+                            HStack { // Use HStack for ProgressView alignment
+                                Spacer()
+                                if isProcessing && !(errorMessage == nil && successMessage == nil) { // Show ProgressView only during email/pass processing
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .padding(.trailing, 5) // Add padding if needed
+                                }
                                 Text(isSignUp ? "Sign Up" : "Sign In")
                                     .fontWeight(.bold)
+                                Spacer()
                             }
                         }
                         .font(.headline)
                         .foregroundColor(.white)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        // Updated button color to match the new theme
                         .background(Color.teal.opacity(0.8))
                         .cornerRadius(12)
                         .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
                         .disabled(isProcessing)
-                        
+
+
+                        Divider()
+                            .background(Color.white.opacity(0.5))
+
+
+                        // --- Start: Added Google Sign-In Button ---
+                        GoogleSignInButton(viewModel: GoogleSignInButtonViewModel(scheme: .dark, style: .wide, state: isProcessing ? .disabled : .normal)) { // Disable button while processing
+                             handleGoogleSignIn()
+                         }
+                         .disabled(isProcessing) // Also disable interaction
+                         .padding(.bottom, 5) // Add some bottom padding
+                         // --- End: Added Google Sign-In Button ---
+
                     }
                     .padding(30)
                     .background(.ultraThinMaterial)
@@ -101,28 +122,36 @@ struct AuthenticationView: View {
                     if let errorMessage = errorMessage {
                         Text(errorMessage)
                             .foregroundColor(.white)
+                            .padding(10) // Add padding
+                            .frame(maxWidth: .infinity) // Make it full width
                             .background(Color.red.opacity(0.8))
                             .cornerRadius(8)
                             .padding(.horizontal)
                             .font(.caption)
                             .multilineTextAlignment(.center)
+                            .transition(.opacity) // Add transition
                     } else if let successMessage = successMessage {
                         Text(successMessage)
                             .foregroundColor(.white)
+                            .padding(10) // Add padding
+                            .frame(maxWidth: .infinity) // Make it full width
                             .background(Color.green.opacity(0.8))
                             .cornerRadius(8)
                             .padding(.horizontal)
                             .font(.caption)
                             .multilineTextAlignment(.center)
+                            .transition(.opacity) // Add transition
                     }
-                    
+
                     Spacer()
 
                     // Footer Buttons
                     VStack(spacing: 15) {
                         Button(action: {
-                            isSignUp.toggle()
-                            clearMessages()
+                            withAnimation { // Add animation for toggle
+                                isSignUp.toggle()
+                                clearMessages()
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Text(isSignUp ? "Already have an account?" : "Don't have an account?")
@@ -132,7 +161,7 @@ struct AuthenticationView: View {
                             .font(.footnote)
                             .foregroundColor(.white)
                         }
-                        
+
                         Button(action: onContinueAsGuest) {
                             Text("Continue as Guest")
                                 .font(.footnote)
@@ -144,6 +173,10 @@ struct AuthenticationView: View {
                 }
             }
         }
+        // Clear messages when view disappears
+        .onDisappear {
+            clearMessages()
+        }
     }
 
     private func clearMessages() {
@@ -151,48 +184,84 @@ struct AuthenticationView: View {
         successMessage = nil
     }
 
+    // Renamed function specific to Google Sign In
+    private func handleGoogleSignIn() {
+         isProcessing = true
+         clearMessages()
+         firebaseManager.signInWithGoogle(rentalManager: rentalManager) { error in
+             handleAuthResult(error: error, isGoogleSignIn: true) // Pass flag
+         }
+     }
+
+    // Handles Email/Password Authentication
     private func handleAuthentication() {
-        isProcessing = true
-        clearMessages()
-        
-        if isSignUp {
-            firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager, completion: handleAuthResult)
-        } else {
-            firebaseManager.signIn(email: email, password: password, rentalManager: rentalManager, completion: handleAuthResult)
+        withAnimation { // Wrap state changes in animation
+            isProcessing = true
+            clearMessages()
         }
-    }
-    
-    private func handleForgotPassword() {
-        isProcessing = true
-        clearMessages()
-        
-        firebaseManager.forgotPassword(email: email) { error in
-            isProcessing = false
-            if let error = error {
-                errorMessage = error.localizedDescription
-            } else {
-                successMessage = "Password reset email sent. Please check your inbox."
+
+        if isSignUp {
+            // *** FIX HERE ***
+            // Wrap the call in a closure to match the expected signature.
+            firebaseManager.signUp(email: email, password: password, rentalManager: rentalManager) { error in
+                handleAuthResult(error: error, isGoogleSignIn: false)
+            }
+        } else {
+            // *** FIX HERE ***
+            // Wrap the call in a closure to match the expected signature.
+            firebaseManager.signIn(email: email, password: password, rentalManager: rentalManager) { error in
+                handleAuthResult(error: error, isGoogleSignIn: false)
             }
         }
     }
 
-    private func handleAuthResult(error: Error?) {
-        if let error = error {
-            self.errorMessage = error.localizedDescription
-            self.isProcessing = false
-        } else {
-            self.successMessage = isSignUp ? "Account created! Logging in..." : "Sign in successful! Loading..."
+    private func handleForgotPassword() {
+        withAnimation {
+             isProcessing = true
+             clearMessages()
+         }
+
+        firebaseManager.forgotPassword(email: email) { error in
+            withAnimation { // Animate message appearance
+                isProcessing = false // Reset processing state *after* completion
+                if let error = error {
+                    errorMessage = error.localizedDescription
+                } else {
+                    successMessage = "Password reset email sent. Please check your inbox."
+                }
+            }
         }
     }
+
+    // Updated to handle both auth types and reset isProcessing
+    private func handleAuthResult(error: Error?, isGoogleSignIn: Bool = false) {
+         // Always reset processing state on the main thread after completion
+         DispatchQueue.main.async {
+             withAnimation {
+                 if let error = error {
+                     self.errorMessage = error.localizedDescription
+                     self.isProcessing = false // Reset on error
+                 } else {
+                     // Determine success message based on auth type
+                     if isGoogleSignIn {
+                         self.successMessage = "Google sign in successful! Loading..."
+                     } else {
+                         self.successMessage = isSignUp ? "Account created! Logging in..." : "Sign in successful! Loading..."
+                     }
+                     // Keep isProcessing true on success, as the view will transition away
+                 }
+             }
+         }
+     }
 }
 
-// Animated Background View
+// Animated Background View (No changes needed)
 struct AnimatedBackground: View {
     @State private var start = UnitPoint(x: 0, y: -2)
     @State private var end = UnitPoint(x: 4, y: 0)
-    
+
     let timer = Timer.publish(every: 1, on: .main, in: .default).autoconnect()
-    
+
     // New, more professional color palette
     let colors = [
         Color(red: 0.1, green: 0.3, blue: 0.5), // Deep Blue
@@ -205,15 +274,17 @@ struct AnimatedBackground: View {
         LinearGradient(gradient: Gradient(colors: colors), startPoint: start, endPoint: end)
             .animation(Animation.easeInOut(duration: 6).repeatForever(), value: start)
             .onReceive(timer) { _ in
-                self.start = UnitPoint(x: 4, y: 0)
-                self.end = UnitPoint(x: 0, y: 2)
-                self.start = UnitPoint(x: -4, y: 20)
-                self.start = UnitPoint(x: 4, y: 0)
+                // Simplified animation logic slightly
+                withAnimation {
+                    self.start = UnitPoint(x: Double.random(in: -1...1), y: Double.random(in: -2...0))
+                    self.end = UnitPoint(x: Double.random(in: -1...1), y: Double.random(in: 1...3))
+                }
             }
     }
 }
 
-// Custom Text Field View
+
+// Custom Text Field View (No changes needed)
 struct CustomTextField: View {
     var placeholder: String
     @Binding var text: String
@@ -224,22 +295,24 @@ struct CustomTextField: View {
         HStack {
             Image(systemName: iconName)
                 .foregroundColor(.white.opacity(0.7))
+                .frame(width: 20) // Give icon consistent width
             if isSecure {
                 SecureField("", text: $text)
                     .placeholder(when: text.isEmpty) {
                         Text(placeholder).foregroundColor(.white.opacity(0.5))
                     }
+                    .foregroundColor(.white) // Ensure text color is white
             } else {
                 TextField("", text: $text)
                     .placeholder(when: text.isEmpty) {
                         Text(placeholder).foregroundColor(.white.opacity(0.5))
                     }
+                    .foregroundColor(.white) // Ensure text color is white
             }
         }
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(12)
-        .foregroundColor(.white)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
@@ -247,7 +320,7 @@ struct CustomTextField: View {
     }
 }
 
-// Helper for placeholder color
+// Helper for placeholder color (No changes needed)
 extension View {
     func placeholder<Content: View>(
         when shouldShow: Bool,
