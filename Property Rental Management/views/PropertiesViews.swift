@@ -1,9 +1,3 @@
-//
-//  PropertiesViews.swift
-//  Property Rental Management
-//
-//  Created by Md Arafat Rahman on 25/09/2025.
-//
 import SwiftUI
 import PhotosUI
 
@@ -36,6 +30,7 @@ struct PropertiesView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Properties")
+            .navigationBarTitleDisplayMode(.inline) // Added to align heading and icon
             .searchable(text: $searchText, prompt: "Search by name or address")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

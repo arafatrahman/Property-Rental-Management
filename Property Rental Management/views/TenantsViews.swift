@@ -50,6 +50,7 @@ struct TenantsView: View {
                 .listStyle(.insetGrouped)
             }
             .navigationTitle("Tenants")
+            .navigationBarTitleDisplayMode(.inline) // Ensures title and add icon are in the same row
             .searchable(text: $searchText, prompt: "Search by name or email")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -165,12 +166,17 @@ struct AddEditTenantView: View {
                     }
                 }
                 
-                Section("Lease Details") {
+                // UPDATED SECTION: Clearer labeling and footer explanation
+                Section(
+                    header: Text("Lease Details"),
+                    footer: Text(tenant == nil ? "Initial Amount Owed: Enter any amount the tenant owes immediately (e.g. first month's rent or past arrears)." : "This reflects the tenant's current outstanding balance.")
+                ) {
                     DatePicker("Lease Start", selection: $leaseStartDate, displayedComponents: .date)
                     DatePicker("Lease End", selection: $leaseEndDate, displayedComponents: .date)
                     
                     HStack {
-                        Text("Opening Balance (\(settings.currencySymbol.rawValue))")
+                        // Dynamic label based on context (Add vs Edit)
+                        Text(tenant == nil ? "Initial Amount Owed (\(settings.currencySymbol.rawValue))" : "Current Balance (\(settings.currencySymbol.rawValue))")
                         TextField("0", text: $amountOwedString)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)

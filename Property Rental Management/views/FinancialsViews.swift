@@ -228,6 +228,7 @@ struct FinancialsView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Financials")
+            .navigationBarTitleDisplayMode(.inline) // Changed to inline
             .searchable(text: $searchText, prompt: "Search by description")
             .toolbar {
                 Menu {

@@ -22,7 +22,7 @@ struct SplashScreenView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 150, height: 150)
-                    Text("PRM")
+                    Text("RentEase")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
